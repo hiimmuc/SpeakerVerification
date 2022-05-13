@@ -1,0 +1,34 @@
+device: "cuda" 
+model: ECAPA_TDNN
+
+train_list: dataset/train_callbot_v2/train_def.txt
+test_list: dataset/train_callbot/val_def_cb.txt 
+save_path: backup/
+
+max_epoch: 500 
+batch_size: 16
+nDataLoaderThread: 0
+optimizer: adam
+criterion: MultiSimilarity_v2
+nPerSpeaker: 5
+
+n_mels: 80 
+margin: 0.1
+scale: 30
+lr: 0.001
+
+callbacks: stepLR
+
+max_frames: 100
+eval_frames: 100
+sample_rate: 8000
+
+nClasses: 13897 # cb: 13897 cskh: 20000 mix 33897
+test_interval: -1
+step_size: 10
+es_patience: 15
+
+augment_chain: env_corrupt time_domain spec_domain
+
+initial_model: backup/ECAPA_TDNN/model/best_state.model
+initial_model_infer: backup/ECAPA_TDNN/model/best_state.model
