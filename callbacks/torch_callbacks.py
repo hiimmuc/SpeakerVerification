@@ -1,25 +1,26 @@
 import torch
 import numpy as np
 
-def cosine_annealinglr_v1(optimizer, test_interval, lr_decay, T_max=10000, lr_min=1e-6, lr=1e-3,  **kwargs):
-    def cosine_annealing(step, total_steps, lr_max, lr_min):
+
+def cosine_annealinglr_cus(optimizer, test_interval, lr_decay, T_max=10000, lr_min=1e-6, lr=1e-3,  **kwargs):
+    def _cosine_annealing(v, total_steps, lr_max, lr_min):
         return lr_min + (lr_max - lr_min) * 0.5 * (1 + np.cos(step / total_steps * np.pi))
     
     lr_scheduler = torch.optim.lr_scheduler.LambdaLR(
         optimizer,
-        lr_lambda=lambda step: cosine_annealing(
-            step,
-            T_max,
-            1,  # since lr_lambda computes multiplicative factor
-            lr_min / lr,
+        lr_lambda=lambda step: _cosine_annealing(
+            step=step,
+            total_steps=T_max,
+            lr_max=lr,  # since lr_lambda computes multiplicative factor
+            lr_min=lr_min,
         ),
     )
-    return lr_scheduler, 'epoch'
+    return lr_scheduler, 'iteration'
 
 
-def cosine_annealinglr(optimizer, T_max, eta_min=0, last_epoch=- 1, verbose=False, **kwargs):
+def cosine_annealinglr_pt(optimizer, T_max=10000, eta_min=0, last_epoch=- 1, verbose=False, **kwargs):
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max, eta_min=eta_min, last_epoch=last_epoch, verbose=verbose)
-    return lr_scheduler, 'epoch'
+    return lr_scheduler, 'iteration'
 
 
 def cosine_annealing_warm_restarts(optimizer, T_max=10000, T_mult=1, eta_min=0, last_epoch=- 1, verbose=False, **kwargs):
