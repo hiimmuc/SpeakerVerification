@@ -1,13 +1,16 @@
 import argparse
 import os
 import subprocess
+
 import torch.distributed as dist
 import torch.multiprocessing as mp
-
+from export import *
 from inference import inference
 from trainer import train
 from utils import read_config
-from export import *
+
+import yaml
+
 
 def main(args):
     if args.do_train:
@@ -39,6 +42,16 @@ if __name__ == '__main__':
     parser.add_argument('--do_infer', action='store_true', default=False)
     parser.add_argument('--do_export', action='store_true', default=False)
     
+    # Infer mode
+    parser.add_argument('--eval',
+                        dest='eval',
+                        action='store_true',
+                        help='Eval only')
+    parser.add_argument('--test',
+                        dest='test',
+                        action='store_true',
+                        help='Test only')
+    
     # Device settings
     parser.add_argument('--device',
                         type=str,
@@ -48,6 +61,7 @@ if __name__ == '__main__':
                         action='store_true', 
                         default=True, 
                         help='Decise wether use multi gpus')
+    
     ## Distributed and mixed precision training
     parser.add_argument('--port',           
                         type=str,   
@@ -230,10 +244,14 @@ if __name__ == '__main__':
                         type=str,
                         default="dataset/train.def.txt",
                         help='Train list')
-    parser.add_argument('--test_list',
+    parser.add_argument('--eval_list',
                         type=str,
                         default="dataset/data_public_test.txt",
                         help='Evaluation list')
+    parser.add_argument('--test_list',
+                        type=str,
+                        default="dataset/data_public_test.txt",
+                        help='Test list')
     parser.add_argument('--test_path',
                         type=str,
                         default="dataset/",
@@ -246,24 +264,6 @@ if __name__ == '__main__':
                         type=str,
                         default="dataset/augment_data/RIRS_NOISES/simulated_rirs",
                         help='Absolute path to the augment set')
-
-    # Infer mode
-    parser.add_argument('--eval',
-                        dest='eval',
-                        action='store_true',
-                        help='Eval only')
-    parser.add_argument('--test',
-                        dest='test',
-                        action='store_true',
-                        help='Test only')
-    parser.add_argument('--test_by_pair',
-                        dest='test_by_pair',
-                        action='store_true',
-                        help='Test only')
-    parser.add_argument('--export',
-                        dest='export',
-                        action='store_true',
-                        help='export onnx format')
     
     ## Evaluation parameters
     parser.add_argument('--dcf_p_target',   
@@ -338,6 +338,9 @@ if __name__ == '__main__':
         if args.config is not None:
             config_dir = '/'.join(str(args.config).split('/')[:-1])
             subprocess.call(f"cp -R {config_dir}/*.yaml {config_clone_path}", shell=True)
+    with open(f'{config_clone_path}/config.yaml', 'w') as outfile:
+        yaml.dump(vars(args), outfile, default_flow_style=False)
+        
     if args.do_infer:
         args.com = args.test_list.replace('.txt', '_results.txt') if not args.com else args.com
        

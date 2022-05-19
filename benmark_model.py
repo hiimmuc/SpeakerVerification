@@ -100,9 +100,12 @@ def bendmark_models(model_dir, eval_config_file, test_config_file):
                                   f"Save to {args.com} and {args.ref} \n========================================\n"])
         test_log_file.close()
     sys.exit(1)
+    
         
 if __name__ == '__main__':
-    bendmark_models("backup/Raw_ECAPA/model", "backup/config/config_eval.yaml",  "backup/config/config_test.yaml")
+    model_path = "backup/1003/Raw_ECAPA/ARmSoftmax/model"
+    eval_path = ""
+    bendmark_models(model_path, "backup/config/config_eval.yaml",  "backup/config/config_test.yaml")
         
 
         

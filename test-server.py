@@ -27,17 +27,19 @@ os.makedirs(log_service_root, exist_ok=True)
 
 # ==================================================load Model========================================
 sr = 8000
-eval_frames=100
-num_eval=10
+eval_frames=200
+num_eval=20
 normalize=True
 
 norm_mode = 'uniform'
-threshold = 0.3272123336791992
 base_threshold = 0.5
 compare_threshold = 0.6
 
-model_path = str(Path('backup/Raw_ECAPA/model/cb_0324_ge2e_v1.model'))
-config_path = str(Path('backup/Raw_ECAPA/config_deploy.yaml'))
+threshold = 0.27198657393455505
+model_path = str(Path('backup/1001/Raw_ECAPA/ARmSoftmax/model/best_state.pt'))
+config_path = str(Path('backup/1001/Raw_ECAPA/ARmSoftmax/config/config_eval.yaml'))
+args = read_config(config_path)
+
 print("\n<<>> Loaded from:", model_path, "with threshold:", threshold)
 
 # read config and load model

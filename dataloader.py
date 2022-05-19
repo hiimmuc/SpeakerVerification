@@ -92,17 +92,17 @@ class Loader(Dataset):
                 if augtype == 'rev':
                     audio = self.augment_engine.reverberate(audio)
                 elif augtype == 'noise':
-                    mode = np.random.choice(['noise', 'speech', 'music', 'noise_vad', 'noise_rirs'], p=[0, 0, 0, 0.2, 0.8])
+                    mode = np.random.choice(['noise', 'speech', 'music', 'noise_vad', 'noise_rirs'], p=[0.1, 0.1, 0.1, 0.2, 0.5])
                     audio = self.augment_engine.additive_noise(mode, audio)
                 elif augtype == 'both':
                     # combined reverb and noise
                     order = np.random.choice(['noise_first', 'rev_first'], p=[0.5, 0.5])
                     if order == 'rev_first':
                         audio = self.augment_engine.reverberate(audio)
-                        mode = np.random.choice(['noise', 'speech', 'music', 'noise_vad', 'noise_rirs'], p=[0, 0, 0, 0.2, 0.8])
+                        mode = np.random.choice(['noise', 'speech', 'music', 'noise_vad', 'noise_rirs'], p=[0.1, 0.1, 0.1, 0.2, 0.5])
                         audio = self.augment_engine.additive_noise(mode, audio)
                     else:
-                        mode = np.random.choice(['noise', 'speech', 'music', 'noise_vad', 'noise_rirs'], p=[0, 0, 0, 0.2, 0.8])
+                        mode = np.random.choice(['noise', 'speech', 'music', 'noise_vad', 'noise_rirs'], p=[0.1, 0.1, 0.1, 0.2, 0.5])
                         audio = self.augment_engine.additive_noise(mode, audio)   
                         audio = self.augment_engine.reverberate(audio)
                 else:

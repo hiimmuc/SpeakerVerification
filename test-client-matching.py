@@ -127,14 +127,15 @@ if __name__ == '__main__':
         coms = [args.com]
         
     # test log
-    for refs in [ref, ref_norm]:
-        for coms in [com, com_norm]:
-            print(refs, end=' vs ')
-            for c in coms:
-                print(c)
-                get_response(refs, [c])
-            
-    # get_response(refs, coms)
+#     for refs in [ref, ref_norm]:
+#         for coms in [com, com_norm]:
+#             print(refs, end=' vs ')
+#             for c in coms:
+#                 print(c)
+#                 get_response(refs, [c])
+    coms = ['log_service/unknown/Chau Anh (tin tuc).m4a', 'log_service/unknown/Chau Anh (tong dai).m4a', 'log_service/unknown/Master Hoai Thu.wav', 'log_service/unknown/Master Huyen Trang.wav', 'log_service/unknown/Master Thuy Linh.wav'] 
+    for c in  coms:
+        get_response(['log_service/unknown/1_Khanh_An.wav'], [c])
     print('')
 #     get_response(refs, coms)
 ######################################################################

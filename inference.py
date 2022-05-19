@@ -2,9 +2,8 @@ import csv
 import glob
 import os
 import random
-import sys
 import subprocess
-
+import sys
 import time
 from math import fabs
 from pathlib import Path
@@ -12,14 +11,11 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn.functional as F
-from tqdm import tqdm
-
-from sklearn.metrics import classification_report
-from sklearn.metrics import confusion_matrix, roc_curve
-from sklearn.metrics import fbeta_score, accuracy_score
-
 from model import SpeakerNet
-from utils import tuneThresholdfromScore, ComputeErrorRates, ComputeMinDcf
+from sklearn.metrics import (accuracy_score, classification_report,
+                             confusion_matrix, fbeta_score, roc_curve)
+from tqdm import tqdm
+from utils import ComputeErrorRates, ComputeMinDcf, tuneThresholdfromScore
 
 # ---------------------------------//
 
@@ -75,7 +71,7 @@ def inference(args):
     ############################################## Evaluation from list
     if args.eval is True:
         sc, lab, trials = model.evaluateFromList(
-            args.test_list,
+            args.eval_list,
             cohorts_path=args.cohorts_path,
             print_interval=1,
             eval_frames=args.eval_frames,
@@ -111,7 +107,7 @@ def inference(args):
               f">> F-score {result['prec_recall'][2]}% at threshold {result['prec_recall'][-1]}\n")
         
         score_file.writelines(
-            [f"[Evaluation] result on: [{args.test_list}] with [{args.initial_model_infer}]\n",
+            [f"[Evaluation] result on: [{args.eval_list}] with [{args.initial_model_infer}]\n",
              f"Best sum rate {best_sum_rate} at {best_tfa}\n",
              f" EER {result['roc'][1]}% at threshold {result['roc'][-1]}\nAUC {result['roc'][2]}\n",
              f"Gmean result:\n",
@@ -150,8 +146,7 @@ def inference(args):
 
     ########################## Test from list (audio1,audio2) and compare to truth file
     if args.test is True:
-        model.testFromList(args.test_path,
-                           args.test_list,
+        model.testFromList(args.test_list,
                            cohorts_path=args.cohorts_path,
                            thre_score=threshold,
                            print_interval=1,
@@ -169,16 +164,6 @@ def inference(args):
         test_log_file.close()
         sys.exit(1)
 
-    ######################################## Test pair by pair
-    if args.test_by_pair is True:
-        
-        model.test_each_pair(args.test_path,
-                             cohorts_path=args.cohorts_path,
-                             thre_score=threshold,
-                             print_interval=1,
-                             eval_frames=args.eval_frames,
-                             scoring_mode=scoring_mode)
-        sys.exit(1)
 
     ###################################### Prepare embeddings for cohorts/verification
     if args.prepare is True:

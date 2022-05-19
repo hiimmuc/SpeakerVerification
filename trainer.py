@@ -74,7 +74,7 @@ def train(gpu, ngpus_per_node, args):
             s.__S__ = s.__S__.to(args.device)
     except Exception as e:
         print(e)
-        s = s.to(args.device)
+        s.__S__ = s.__S__.to(args.device)
         
 #     try:
 #         if args.distributed:
@@ -216,7 +216,7 @@ def train(gpu, ngpus_per_node, args):
                 
         writer.add_scalar('Loss/train', loss, it)
         writer.add_scalar('Accuracy/train', train_acc, it)
-
+        writer.add_scalar('Params/learning_rate', max(clr), it)
         it += 1
 
 # ============================ END =============================

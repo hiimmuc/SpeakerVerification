@@ -133,7 +133,7 @@ class SpeakerNet(nn.Module):
                                    TLoss=f"{round(float(loss / counter), 5)}", 
                                    TAcc=f"{round(float(top1 / counter), 3)}%")
 
-            if self.lr_step == 'iteration' and self.callback in ['steplr', 'cosinelr', 'cycliclr']:
+            if self.lr_step == 'iteration':
                 self.__scheduler__.step()
 
         # select mode for callbacks
