@@ -150,12 +150,12 @@ class AugmentWAV(object):
             self.noiselist[file.split('/')[-4]].append(file)
         
         # custom noise use additive noise latter
-        noise_vad_files = glob.glob("dataset/noise_vad/noise_vad/*/*.wav")
+        noise_vad_files = glob.glob("dataset/augment_data/noise_vad/noise_vad/*/*.wav")
         for noise_file in noise_vad_files:
             self.noiselist.setdefault('noise_vad', []).append(noise_file)
         
         # noise from rirs noise
-        rir_noise_files = glob.glob(os.path.join('dataset/RIRS_NOISES/pointsource_noises/', '*.wav')) + glob.glob(os.path.join('dataset/RIRS_NOISES/real_rirs_isotropic_noises/', '*.wav')) 
+        rir_noise_files = glob.glob(os.path.join('dataset/RIRS_NOISES/pointsource_noises/', '*.wav')) + glob.glob(os.path.join('dataset/augment_data/RIRS_NOISES/real_rirs_isotropic_noises/', '*.wav')) 
         for noise_file in rir_noise_files:
             self.noiselist.setdefault('noise_rirs', []).append(noise_file)
             
