@@ -394,15 +394,15 @@ class ECAPA_TDNN(torch.nn.Module):
         self.channels = channels
         self.aug = kwargs['augment']
         self.aug_chain = kwargs['augment_chain']
-        sample_rate = int(kwargs['sample_rate'])
-        hoplength = int(10e-3 * sample_rate)
-        winlength = int(25e-3 * sample_rate)
+        # sample_rate = int(kwargs['sample_rate'])
+        # hoplength = int(10e-3 * sample_rate)
+        # winlength = int(25e-3 * sample_rate)
         n_mels = kwargs['n_mels']
         input_size = n_mels
-        
+
         self.blocks = nn.ModuleList()
 
-        self.specaug = SpecAugment() # Spec augmentation
+        self.specaug = SpecAugment()  # Spec augmentation
 
         # The initial TDNN layer
         self.blocks.append(
@@ -461,14 +461,14 @@ class ECAPA_TDNN(torch.nn.Module):
             Tensor of shape (batch, time, channel).
         """
         # Minimize transpose for efficiency
-        
+
         with torch.no_grad():
             x = x + 1e-6
-            x = x.log()   
+            x = x.log()
             x = x - torch.mean(x, dim=-1, keepdim=True)
             if self.aug and 'spec_domain' in self.aug_chain:
                 x = self.specaug(x)
-        
+
         # x shape: batch x n_mels x n_frames of batch x fea x time
 
         xl = []
@@ -482,7 +482,7 @@ class ECAPA_TDNN(torch.nn.Module):
         # Multi-layer feature aggregation
         x = torch.cat(xl[1:], dim=1)
         x = self.mfa(x)
-        
+
         # Attentive Statistical Pooling
         x = self.asp(x, lengths=lengths)
         x = self.asp_bn(x)
@@ -490,9 +490,10 @@ class ECAPA_TDNN(torch.nn.Module):
         # Final linear transformation
         x = self.fc(x)
         x = x.squeeze()
-       
+
         return x
-    
+
+
 def MainModel(nOut=512, **kwargs):
     model = ECAPA_TDNN(lin_neurons=nOut, **kwargs)
     return model

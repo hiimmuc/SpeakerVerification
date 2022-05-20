@@ -1,40 +1,44 @@
 import os
 import argparse
-import random
 import time
 
 import numpy as np
+from sklearn.utils import shuffle
 import torch
 from torch.utils.data import DataLoader, Dataset
 from tqdm.auto import tqdm
 
 from processing.audio_loader import loadWAV, AugmentWAV
-from processing.vad_tool import VAD
 from utils import round_down, worker_init_fn
+import torch.distributed as dist
+from utils import read_config
 
-class Loader(Dataset):
-    def __init__(self, dataset_file_name, augment, musan_path, rir_path, max_frames, n_mels, aug_folder='offline', **kwargs):
+
+class TrainLoader(Dataset):
+    def __init__(self, dataset_file_name,
+                 augment,
+                 augment_options,
+                 audio_spec,
+                 aug_folder='offline'):
 
         self.dataset_file_name = dataset_file_name
-        self.max_frames = max_frames
+        self.audio_spec = audio_spec
+        self.augment_options = augment_options
+        self.max_frames = round(audio_spec['sample_rate'] * (
+            audio_spec['sentence_len'] - audio_spec['win_len']) / audio_spec['hop_len'])
         self.augment = augment
-        self.n_mels = n_mels
-        self.kwargs = kwargs
-        self.sr = kwargs['sample_rate']
+
+        self.sr = audio_spec['sample_rate']
 
         # augmented folder files
         self.aug_folder = aug_folder
-        self.musan_path = musan_path
-        self.rir_path = rir_path
-        self.augment_chain = kwargs['augment_chain'] if 'augment_chain' in kwargs else ['env_corrupt', 'time_domain']
-        
+        self.augment_paths = augment_options['augment_paths']
+        self.augment_chain = augment_options['augment_chain']
+
         if self.augment and ('env_corrupt' in self.augment_chain):
             if all(os.path.exists(path) for path in [self.musan_path, self.rir_path]):
-                self.augment_engine = AugmentWAV(musan_path=musan_path,
-                                                 rir_path=rir_path,
-                                                 max_frames=max_frames,
-                                                 sample_rate=self.sr, 
-                                                 target_db=None)
+                self.augment_engine = AugmentWAV(
+                    augment_options, audio_spec, target_db=None)
             else:
                 self.augment_engine = None
 
@@ -68,42 +72,38 @@ class Loader(Dataset):
         for index in indices:
             # Load audio
             audio_file = self.data_list[index]
-#             if self.augment and ('env_corrupt' in self.augment_chain) and (self.aug_folder == 'offline'):  
-#                 # if aug audio files and raw audio files is in the same folder
-#                 aug_type = random.randint(0, 4)
-#                 if aug_type == 0:
-#                     pass
-#                 else:
-#                     # for type 1 -> 4
-#                     audio_file = f"{self.data_list[index].replace('.wav', '')}_augmented_{aug_type}.wav"
-                    
             # time domain augment
-            audio = loadWAV(audio_file, self.max_frames, 
-                            evalmode=False, 
-                            augment=self.augment, 
-                            sample_rate=self.sr, 
-                            augment_chain=self.augment_chain)
-            
-            #env corrupt augment
-            if self.augment and ('env_corrupt' in self.augment_chain) and (self.aug_folder == 'online'):  
+            audio = loadWAV(audio_file, self.audio_spec,
+                            evalmode=False,
+                            augment=self.augment,
+                            augment_options=self.augment_options)
+
+            # env corrupt augment
+            if self.augment and ('env_corrupt' in self.augment_chain) and (self.aug_folder == 'online'):
                 # if exists augmented folder(30GB) separately
                 # env corruption adding from musan, revberation
-                augtype = np.random.choice(['rev', 'noise', 'both', 'none'], p=[0.2, 0.4, 0.2, 0.2])
+                env_corrupt_proportions = self.augment_options['noise_proportion']
+                augtype = np.random.choice(
+                    ['rev', 'noise', 'both', 'none'], p=[0.2, 0.4, 0.2, 0.2])
                 if augtype == 'rev':
                     audio = self.augment_engine.reverberate(audio)
                 elif augtype == 'noise':
-                    mode = np.random.choice(['noise', 'speech', 'music', 'noise_vad', 'noise_rirs'], p=[0.1, 0.1, 0.1, 0.2, 0.5])
+                    mode = np.random.choice(
+                        ['noise', 'speech', 'music', 'noise_vad', 'noise_rirs'], p=env_corrupt_proportions)
                     audio = self.augment_engine.additive_noise(mode, audio)
                 elif augtype == 'both':
                     # combined reverb and noise
-                    order = np.random.choice(['noise_first', 'rev_first'], p=[0.5, 0.5])
+                    order = np.random.choice(
+                        ['noise_first', 'rev_first'], p=[0.5, 0.5])
                     if order == 'rev_first':
                         audio = self.augment_engine.reverberate(audio)
-                        mode = np.random.choice(['noise', 'speech', 'music', 'noise_vad', 'noise_rirs'], p=[0.1, 0.1, 0.1, 0.2, 0.5])
+                        mode = np.random.choice(
+                            ['noise', 'speech', 'music', 'noise_vad', 'noise_rirs'], p=env_corrupt_proportions)
                         audio = self.augment_engine.additive_noise(mode, audio)
                     else:
-                        mode = np.random.choice(['noise', 'speech', 'music', 'noise_vad', 'noise_rirs'], p=[0.1, 0.1, 0.1, 0.2, 0.5])
-                        audio = self.augment_engine.additive_noise(mode, audio)   
+                        mode = np.random.choice(
+                            ['noise', 'speech', 'music', 'noise_vad', 'noise_rirs'], p=env_corrupt_proportions)
+                        audio = self.augment_engine.additive_noise(mode, audio)
                         audio = self.augment_engine.reverberate(audio)
                 else:
                     # none type means dont augment
@@ -119,7 +119,7 @@ class Loader(Dataset):
         return len(self.data_list)
 
 
-class Sampler(torch.utils.data.Sampler):
+class TrainSampler(torch.utils.data.Sampler):
     def __init__(self, data_source, nPerSpeaker, max_seg_per_spk, batch_size, **kwargs):
         self.data_source = data_source
         self.label_dict = data_source.label_dict
@@ -167,85 +167,139 @@ class Sampler(torch.utils.data.Sampler):
         return len(self.data_source)
 
 
-def get_data_loader(dataset_file_name, batch_size, augment, musan_path,
-                    rir_path, max_frames, max_seg_per_spk, nDataLoaderThread,
-                    nPerSpeaker, n_mels, **kwargs):
-    train_dataset = Loader(dataset_file_name, augment, musan_path,
-                           rir_path, max_frames, n_mels, aug_folder='online', **kwargs)
+def train_data_loader(args):
+    train_annotation = args.train_annotation
 
-    train_sampler = Sampler(train_dataset, nPerSpeaker,
-                            max_seg_per_spk, batch_size, **kwargs)
+    batch_size = args.dataloader_options['batch_size']
+    shuffle = args.dataloader_options['shuffle']
+    num_workers = args.dataloader_options['num_workers']
+    nPerSpeaker = args.dataloader_options['nPerSpeaker']
+    max_seg_per_spk = args.dataloader_options['max_seg_per_spk']
+
+    augment = args.augment
+
+    train_dataset = TrainLoader(train_annotation,
+                                augment,
+                                args.augment_options,
+                                args.audio_spec,
+                                aug_folder='online')
+
+    train_sampler = TrainSampler(train_dataset, nPerSpeaker,
+                                 max_seg_per_spk, batch_size)
 
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
-        num_workers=nDataLoaderThread,
+        num_workers=num_workers,
         sampler=train_sampler,
         pin_memory=False,
         worker_init_fn=worker_init_fn,
         drop_last=True,
+        shuffle=shuffle,
     )
 
     return train_loader
+
+
+def test_data_loader():
+    pass
+
+
+class test_dataset_loader(Dataset):
+    def __init__(self, test_list, test_path, eval_frames, num_eval, **kwargs):
+        self.max_frames = eval_frames
+        self.num_eval = num_eval
+        self.test_path = test_path
+        self.test_list = test_list
+
+    def __getitem__(self, index):
+        audio = loadWAV(os.path.join(
+            self.test_path, self.test_list[index]), self.max_frames, evalmode=True, num_eval=self.num_eval)
+        return torch.FloatTensor(audio), self.test_list[index]
+
+    def __len__(self):
+        return len(self.test_list)
 
 
 # Test Data Loader
 parser = argparse.ArgumentParser(description="Data loader")
 if __name__ == '__main__':
     # Test for data loader
-    parser.add_argument('--augment',
+    # YAML
+    parser.add_argument('--config', type=str, default=None)
+
+    # control flow
+    parser.add_argument('--do_train', action='store_true', default=False)
+    parser.add_argument('--do_infer', action='store_true', default=False)
+    parser.add_argument('--do_export', action='store_true', default=False)
+
+    # Infer mode
+    parser.add_argument('--eval',
+                        dest='eval',
+                        action='store_true',
+                        help='Eval only')
+    parser.add_argument('--test',
+                        dest='test',
+                        action='store_true',
+                        help='Test only')
+    parser.add_argument('--predict',
+                        dest='predict',
+                        action='store_true',
+                        help='Predict')
+
+    # Device settings
+    parser.add_argument('--device',
+                        type=str,
+                        default="cuda",
+                        help='cuda or cpu')
+    parser.add_argument('--distributed',
                         action='store_true',
                         default=True,
-                        help='decide whether use augment data')
-    parser.add_argument('--train_list',
+                        help='Decise wether use multi gpus')
+
+    # Distributed and mixed precision training
+    parser.add_argument('--port',
                         type=str,
-                        default="dataset/train_callbot_v2/train_def.txt",
-                        help='Directory to save files(parent root)')
-    parser.add_argument('--batch_size',
-                        type=int,
-                        default=32,
-                        help='Batch size, number of speakers per batch')
-    parser.add_argument('--max_seg_per_spk',
-                        type=int,
-                        default=100,
-                        help='Maximum number of utterances per speaker per epoch')
+                        default="8888",
+                        help='Port for distributed training, input as text')
+    parser.add_argument('--mixedprec',
+                        dest='mixedprec',
+                        action='store_true',
+                        help='Enable mixed precision training')
+
     parser.add_argument('--nDataLoaderThread',
                         type=int,
-                        default=0,
-                        help='Number of loader threads')
-    parser.add_argument('--nPerSpeaker',
-                        type=int,
                         default=2,
-                        help='Number of utterances per speaker per batch, only for metric learning based losses')
-    parser.add_argument('--max_frames',
-                        type=int,
-                        default=100,
-                        help='Input length to the network for training, 1s ~ 100 frames')
-    parser.add_argument('--musan_path',
-                        type=str,
-                        default="dataset/augment_data/musan_split",
-                        help='Absolute path to the augment set')
-    parser.add_argument('--rir_path',
-                        type=str,
-                        default="dataset/augment_data/RIRS_NOISES/simulated_rirs",
-                        help='Absolute path to the augment set')
+                        help='# of loader threads')
 
-    # Model definition for MFCCs
-    parser.add_argument('--n_mels',
-                        type=int,
-                        default=80,
-                        help='Number of mel filter banks')
+    parser.add_argument('--augment',
+                        action='store_true',
+                        default=False,
+                        help='Augment input')
 
-    parser.add_argument('--sample_rate',
+    parser.add_argument('--early_stopping',
+                        action='store_true',
+                        default=False,
+                        help='Early stopping')
+
+    parser.add_argument('--seed',
                         type=int,
-                        default=8000,
-                        help='Number of sample_rate')
-    args = parser.parse_args()
+                        default=1000,
+                        help='seed')
+  #--------------------------------------------------------------------------------------#
+
+    sys_args = parser.parse_args()
+
+    if sys_args.config is not None:
+        args = read_config(sys_args.config, sys_args)
+        args = argparse.Namespace(**args)
+
     t = time.time()
-    train_loader = get_data_loader(args.train_list, **vars(args))
+    train_loader = train_data_loader(args)
 
     print("Delay: ", time.time() - t)
     print(len(train_loader))
+
     for (sample, label) in tqdm(train_loader):
         sample = sample.transpose(0, 1)
         for inp in sample:

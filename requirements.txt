@@ -17,13 +17,11 @@ SoundFile>=0.10.3.post1
 matplotlib
 Flask
 Flask-RESTful
-webrtcvad
 nnAudio
 autopep8
 black
 flake8
 tensorboard
-tensorflow-gpu
 transformers
 seqeval
 folium

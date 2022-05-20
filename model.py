@@ -33,7 +33,7 @@ class WrappedModel(nn.Module):
 class SpeakerNet(nn.Module):
     def __init__(self, save_path, model, features='raw', criterion='Softmax', 
                  optimizer='adam', callbacks='steplr',  device='cuda', max_epoch='500', gpu=0,  **kwargs):
-        
+        # take only args
         super(SpeakerNet, self).__init__()
         self.device = torch.device(device)
         self.save_path = save_path

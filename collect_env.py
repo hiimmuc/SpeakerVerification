@@ -79,6 +79,7 @@ def run_and_parse_first_match(run_lambda, command, regex):
         return None
     return match.group(1)
 
+
 def run_and_return_first_line(run_lambda, command):
     """Runs command using run_lambda and returns first line if output is not empty"""
     rc, out, _ = run_lambda(command)
@@ -91,7 +92,8 @@ def get_conda_packages(run_lambda):
     if get_platform() == 'win32':
         system_root = os.environ.get('SYSTEMROOT', 'C:\\Windows')
         findstr_cmd = os.path.join(system_root, 'System32', 'findstr')
-        grep_cmd = r'{} /R "torch numpy cudatoolkit soumith mkl magma mypy"'.format(findstr_cmd)
+        grep_cmd = r'{} /R "torch numpy cudatoolkit soumith mkl magma mypy"'.format(
+            findstr_cmd)
     else:
         grep_cmd = r'grep "torch\|numpy\|cudatoolkit\|soumith\|mkl\|magma\|mypy"'
     conda = os.environ.get('CONDA_EXE', 'conda')
@@ -105,6 +107,7 @@ def get_conda_packages(run_lambda):
 
 def get_gcc_version(run_lambda):
     return run_and_parse_first_match(run_lambda, 'gcc --version', r'gcc (.*)')
+
 
 def get_clang_version(run_lambda):
     return run_and_parse_first_match(run_lambda, 'clang --version', r'clang version (.*)')
@@ -183,8 +186,10 @@ def get_nvidia_smi():
     smi = 'nvidia-smi'
     if get_platform() == 'win32':
         system_root = os.environ.get('SYSTEMROOT', 'C:\\Windows')
-        program_files_root = os.environ.get('PROGRAMFILES', 'C:\\Program Files')
-        legacy_path = os.path.join(program_files_root, 'NVIDIA Corporation', 'NVSMI', smi)
+        program_files_root = os.environ.get(
+            'PROGRAMFILES', 'C:\\Program Files')
+        legacy_path = os.path.join(
+            program_files_root, 'NVIDIA Corporation', 'NVSMI', smi)
         new_path = os.path.join(system_root, 'System32', smi)
         smis = [new_path, legacy_path]
         for candidate_smi in smis:
@@ -293,12 +298,15 @@ def get_cachingallocator_config():
     ca_config = os.environ.get('PYTORCH_CUDA_ALLOC_CONF', '')
     return ca_config
 
+
 def is_xnnpack_available():
     if TORCH_AVAILABLE:
         import torch.backends.xnnpack
-        return str(torch.backends.xnnpack.enabled)  # type: ignore[attr-defined]
+        # type: ignore[attr-defined]
+        return str(torch.backends.xnnpack.enabled)
     else:
         return "N/A"
+
 
 def get_env_info():
     run_lambda = run
@@ -313,8 +321,10 @@ def get_env_info():
             hip_compiled_version = hip_runtime_version = miopen_runtime_version = 'N/A'
         else:  # HIP version
             cfg = torch._C._show_config().split('\n')
-            hip_runtime_version = [s.rsplit(None, 1)[-1] for s in cfg if 'HIP Runtime' in s][0]
-            miopen_runtime_version = [s.rsplit(None, 1)[-1] for s in cfg if 'MIOpen' in s][0]
+            hip_runtime_version = [s.rsplit(None, 1)[-1]
+                                   for s in cfg if 'HIP Runtime' in s][0]
+            miopen_runtime_version = [
+                s.rsplit(None, 1)[-1] for s in cfg if 'MIOpen' in s][0]
             cuda_version_str = 'N/A'
             hip_compiled_version = torch.version.hip
     else:
@@ -326,7 +336,8 @@ def get_env_info():
     return SystemEnv(
         torch_version=version_str,
         is_debug_build=debug_mode_str,
-        python_version='{} ({}-bit runtime)'.format(sys_version, sys.maxsize.bit_length() + 1),
+        python_version='{} ({}-bit runtime)'.format(sys_version,
+                                                    sys.maxsize.bit_length() + 1),
         python_platform=get_python_platform(),
         is_cuda_available=cuda_available_str,
         cuda_compiled_version=cuda_version_str,
@@ -348,6 +359,7 @@ def get_env_info():
         caching_allocator_config=get_cachingallocator_config(),
         is_xnnpack_available=is_xnnpack_available(),
     )
+
 
 env_info_fmt = """
 PyTorch version: {torch_version}
@@ -435,8 +447,10 @@ def pretty_str(envinfo):
     mutable_dict = replace_nones(mutable_dict)
 
     # If either of these are '', replace with 'No relevant packages'
-    mutable_dict['pip_packages'] = replace_if_empty(mutable_dict['pip_packages'])
-    mutable_dict['conda_packages'] = replace_if_empty(mutable_dict['conda_packages'])
+    mutable_dict['pip_packages'] = replace_if_empty(
+        mutable_dict['pip_packages'])
+    mutable_dict['conda_packages'] = replace_if_empty(
+        mutable_dict['conda_packages'])
 
     # Tag conda and pip packages with a prefix
     # If they were previously None, they'll show up as ie '[conda] Could not collect'
@@ -461,14 +475,15 @@ def main():
     if TORCH_AVAILABLE and hasattr(torch, 'utils') and hasattr(torch.utils, '_crash_handler'):
         minidump_dir = torch.utils._crash_handler.DEFAULT_MINIDUMP_DIR
         if sys.platform == "linux" and os.path.exists(minidump_dir):
-            dumps = [os.path.join(minidump_dir, dump) for dump in os.listdir(minidump_dir)]
+            dumps = [os.path.join(minidump_dir, dump)
+                     for dump in os.listdir(minidump_dir)]
             latest = max(dumps, key=os.path.getctime)
             ctime = os.path.getctime(latest)
-            creation_time = datetime.datetime.fromtimestamp(ctime).strftime('%Y-%m-%d %H:%M:%S')
+            creation_time = datetime.datetime.fromtimestamp(
+                ctime).strftime('%Y-%m-%d %H:%M:%S')
             msg = "\n*** Detected a minidump at {} created on {}, ".format(latest, creation_time) + \
                   "if this is related to your bug please include it when you file a report ***"
             print(msg, file=sys.stderr)
-
 
 
 if __name__ == '__main__':
