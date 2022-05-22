@@ -1,5 +1,5 @@
-[submodule "losses/losses/pytorch-metric-learning"]
-	path = losses/losses/pytorch-metric-learning
+[submodule "losses/pytorch-metric-learning"]
+	path = losses/pytorch-metric-learning
 	url = https://github.com/KevinMusgrave/pytorch-metric-learning.git
 [submodule "processing/torch-audiomentations"]
 	path = processing/torch-audiomentations
