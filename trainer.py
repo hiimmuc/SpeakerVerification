@@ -1,3 +1,19 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+import sys
+import time
+import os
+import argparse
+import socket
+import yaml
+import numpy
+import pdb
+import torch
+import glob
+import zipfile
+import warnings
+import datetime
 import glob
 import os
 import sys
@@ -13,9 +29,20 @@ from callbacks.earlyStopping import *
 from dataloader import train_data_loader
 from model import SpeakerNet, WrappedModel
 from utils import tuneThresholdfromScore, read_log_file, plot_from_file, cprint
-
+import torch.distributed as dist
+import torch.multiprocessing as mp
 from torch.utils.tensorboard import SummaryWriter
 ###
+
+# Try to import NSML
+try:
+    import nsml
+    from nsml import HAS_DATASET, DATASET_PATH, PARALLEL_WORLD, PARALLEL_PORTS, MY_RANK
+    from nsml import NSML_NFS_OUTPUT, SESSION_NAME
+except:
+    pass
+
+warnings.simplefilter("ignore")
 
 
 def train(gpu, ngpus_per_node, args):
