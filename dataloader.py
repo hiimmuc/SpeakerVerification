@@ -14,6 +14,14 @@ import torch.distributed as dist
 from utils import read_config
 
 
+def round_down(num, divisor):
+    return num - (num % divisor)
+
+
+def worker_init_fn(worker_id):
+    np.random.seed(np.random.get_state()[1][0] + worker_id)
+
+
 class TrainLoader(Dataset):
     def __init__(self, dataset_file_name,
                  augment,
@@ -58,13 +66,12 @@ class TrainLoader(Dataset):
             data = line.strip().split()
 
             speaker_label = dictkeys[data[0]]
+            filename = data[1]
 
-            if not (speaker_label in self.label_dict):
-                self.label_dict[speaker_label] = []
+            self.label_dict.setdefault(speaker_label, []).append(lidx)
 
-            self.label_dict[speaker_label].append(lidx)
             self.data_label.append(speaker_label)
-            self.data_list.append(data[1])
+            self.data_list.append(filename)
 
     def __getitem__(self, indices):
         feat = []
@@ -83,8 +90,10 @@ class TrainLoader(Dataset):
                 # if exists augmented folder(30GB) separately
                 # env corruption adding from musan, revberation
                 env_corrupt_proportions = self.augment_options['noise_proportion']
+
                 augtype = np.random.choice(
                     ['rev', 'noise', 'both', 'none'], p=[0.2, 0.4, 0.2, 0.2])
+
                 if augtype == 'rev':
                     audio = self.augment_engine.reverberate(audio)
                 elif augtype == 'noise':
@@ -106,7 +115,7 @@ class TrainLoader(Dataset):
                         audio = self.augment_engine.additive_noise(mode, audio)
                         audio = self.augment_engine.reverberate(audio)
                 else:
-                    # none type means dont augment
+                    # none type means don't augment
                     pass
 
             feat.append(audio)
@@ -120,51 +129,89 @@ class TrainLoader(Dataset):
 
 
 class TrainSampler(torch.utils.data.Sampler):
-    def __init__(self, data_source, nPerSpeaker, max_seg_per_spk, batch_size, **kwargs):
-        self.data_source = data_source
-        self.label_dict = data_source.label_dict
+    def __init__(self, data_source, nPerSpeaker, max_seg_per_spk, batch_size, distributed, seed, **kwargs):
+        self.epoch = 0
+        self.seed = seed
+        self.distributed = distributed
+
         self.nPerSpeaker = nPerSpeaker
         self.max_seg_per_spk = max_seg_per_spk
         self.batch_size = batch_size
 
+        self.data_source = data_source
+        self.data_label = data_source.data_label
+
     def __iter__(self):
-        dictkeys = list(self.label_dict.keys())
+
+        g = torch.Generator()
+        g.manual_seed(self.seed + self.epoch)
+        indices = torch.randperm(len(self.data_label), generator=g).tolist()
+
+        data_dict = {}
+
+        # Sort into dictionary of file indices for each ID
+        for index in indices:
+            speaker_label = self.data_label[index]
+            if not (speaker_label in data_dict):
+                data_dict[speaker_label] = []
+            data_dict[speaker_label].append(index)
+
+        # Group file indices for each class
+        dictkeys = list(data_dict.keys())
         dictkeys.sort()
 
-        def lol(lst, sz): return [lst[i:i + sz]
-                                  for i in range(0, len(lst), sz)]
+        def lol(lst, sz): return [lst[i:i+sz] for i in range(0, len(lst), sz)]
 
         flattened_list = []
         flattened_label = []
 
         # Data for each class
         for findex, key in enumerate(dictkeys):
-            data = self.label_dict[key]
-            numSeg = round_down(min(len(data), self.max_seg_per_spk),
-                                self.nPerSpeaker)
+            data = data_dict[key]
+            numSeg = round_down(
+                min(len(data), self.max_seg_per_spk), self.nPerSpeaker)
 
-            rp = lol(
-                np.random.permutation(len(data))[:numSeg], self.nPerSpeaker)
+            rp = lol(np.arange(numSeg), self.nPerSpeaker)
             flattened_label.extend([findex] * (len(rp)))
             for indices in rp:
                 flattened_list.append([data[i] for i in indices])
 
-        # Data in random order
-        mixid = np.random.permutation(len(flattened_label))
+        # Mix data in random order
+        mixid = torch.randperm(len(flattened_label), generator=g).tolist()
         mixlabel = []
         mixmap = []
 
         # Prevent two pairs of the same speaker in the same batch
         for ii in mixid:
-            startbatch = len(mixlabel) - len(mixlabel) % self.batch_size
+            startbatch = round_down(len(mixlabel), self.batch_size)
             if flattened_label[ii] not in mixlabel[startbatch:]:
                 mixlabel.append(flattened_label[ii])
                 mixmap.append(ii)
 
-        return iter([flattened_list[i] for i in mixmap])
+        mixed_list = [flattened_list[i] for i in mixmap]
 
-    def __len__(self):
+        # Divide data to each GPU
+
+        if self.distributed:
+            total_size = round_down(
+                len(mixed_list), self.batch_size * dist.get_world_size())
+            start_index = int((dist.get_rank()) /
+                              dist.get_world_size() * total_size)
+            end_index = int((dist.get_rank() + 1) /
+                            dist.get_world_size() * total_size)
+            self.num_samples = end_index - start_index
+            return iter(mixed_list[start_index:end_index])
+        else:
+            total_size = round_down(len(mixed_list), self.batch_size)
+            self.num_samples = total_size
+            return iter(mixed_list[:total_size])
+
+    def __len__(self) -> int:
+        # self.num_samples
         return len(self.data_source)
+
+    def set_epoch(self, epoch: int) -> None:
+        self.epoch = epoch
 
 
 def train_data_loader(args):
@@ -184,8 +231,8 @@ def train_data_loader(args):
                                 args.audio_spec,
                                 aug_folder='online')
 
-    train_sampler = TrainSampler(train_dataset, nPerSpeaker,
-                                 max_seg_per_spk, batch_size)
+    train_sampler = TrainSampler(
+        train_dataset, nPerSpeaker=nPerSpeaker, max_seg_per_spk=max_seg_per_spk, **vars(args))
 
     train_loader = DataLoader(
         train_dataset,
@@ -199,10 +246,6 @@ def train_data_loader(args):
     )
 
     return train_loader
-
-
-def test_data_loader():
-    pass
 
 
 class test_dataset_loader(Dataset):
@@ -221,7 +264,6 @@ class test_dataset_loader(Dataset):
         return len(self.test_list)
 
 
-# Test Data Loader
 parser = argparse.ArgumentParser(description="Data loader")
 if __name__ == '__main__':
     # Test for data loader
@@ -254,7 +296,7 @@ if __name__ == '__main__':
                         help='cuda or cpu')
     parser.add_argument('--distributed',
                         action='store_true',
-                        default=True,
+                        default=False,
                         help='Decise wether use multi gpus')
 
     # Distributed and mixed precision training
@@ -293,6 +335,8 @@ if __name__ == '__main__':
     if sys_args.config is not None:
         args = read_config(sys_args.config, sys_args)
         args = argparse.Namespace(**args)
+    else:
+        args = sys_args
 
     t = time.time()
     train_loader = train_data_loader(args)

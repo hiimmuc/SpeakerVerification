@@ -1,6 +1,3 @@
-from utils import read_config
-from email.mime import audio
-from processing.wav_conversion import convert_audio_shell
 import argparse
 import glob
 import hashlib
@@ -10,19 +7,20 @@ import shutil
 import subprocess
 import tarfile
 import time
+from email.mime import audio
 from pathlib import Path
+from typing import SupportsRound
 from zipfile import ZipFile
-
 
 import numpy as np
 import soundfile as sf
 from scipy.io import wavfile
-
 from tqdm.auto import tqdm
 
 from processing.audio_loader import AugmentWAV, loadWAV
-
 from processing.dataset import get_audio_properties, read_blacklist
+from processing.wav_conversion import convert_audio_shell
+from utils import read_config
 
 
 def get_audio_path(folder):
@@ -353,6 +351,13 @@ class DataGenerator():
             random.shuffle(val_pairs)
             wf.writelines(val_pairs)
 
+        # copy to save dir
+        os.makedirs(Path(self.args.train_annotation).parent, exist_ok=True)
+        subprocess.call(
+            f"cp {Path(root.parent, f'metadata/train_{root.parent.name}.txt')} {Path(self.args.train_annotation)}", shell=True)
+        subprocess.call(
+            f"cp {Path(root.parent, f'metadata/val_{root.parent.name}.txt')} {Path(self.args.valid_annotation)}", shell=True)
+        # some information
         print("Valid speakers:", len(valid_spks))
         print("Valid audio files:", len(train_filepaths_list))
         print("Validation pairs:", len(val_pairs))

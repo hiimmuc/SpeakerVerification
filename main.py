@@ -97,7 +97,8 @@ if __name__ == '__main__':
                         type=int,
                         default=1000,
                         help='seed')
-  #--------------------------------------------------------------------------------------#
+    
+   #--------------------------------------------------------------------------------------#
 
     sys_args = parser.parse_args()
 
@@ -122,7 +123,8 @@ if __name__ == '__main__':
         if args.config is not None:
             config_dir = '/'.join(str(args.config).split('/')[:-1])
             subprocess.call(f"cp -R {config_dir}/*.yaml {config_clone_path}", shell=True)
-    # parse metadat to save files
+    
+    # parse metadata to save files
     metadata_path = os.path.join(args.save_folder, 'metadata')
     if os.path.exists(Path(args.data_folder, 'metadata')):
         subprocess.call(

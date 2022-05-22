@@ -1,4 +1,4 @@
-#benchmark dataset:
+# benchmark dataset:
 import itertools
 import os
 import time
@@ -11,8 +11,10 @@ from tqdm import tqdm
 from utils import cosine_simialrity
 import csv
 
+
 def all_pairs(lst):
     return list(itertools.combinations(lst, 2))
+
 
 def check_matching(ref_emb, com_emb, threshold=0.5):
     score = cosine_simialrity(ref_emb, com_emb)
@@ -20,6 +22,7 @@ def check_matching(ref_emb, com_emb, threshold=0.5):
     result = (score / ratio) if (score / ratio) < 1 else 1
     matching = result > 0.5
     return matching, result
+
 
 def read_blacklist(id, duration_limit=1.0, dB_limit=-16, error_limit=0, noise_limit=-15, details_dir="dataset/train_callbot/details"):
     '''
@@ -47,10 +50,11 @@ def read_blacklist(id, duration_limit=1.0, dB_limit=-16, error_limit=0, noise_li
     else:
         return None
 
-    
+
 def benchmark_dataset_by_model(model_path=str(Path('backup/Raw_ECAPA/model/best_state-CB_final_v1.model')),
-                               config_path=str(Path('backup/Raw_ECAPA/config_deploy.yaml')),
-                               threshold= 0.38405078649520874, 
+                               config_path=str(
+                                   Path('backup/Raw_ECAPA/config_deploy.yaml')),
+                               threshold=0.38405078649520874,
                                root='dataset/train_callbot/train',
                                detail_dir="dataset/details/train_cb",
                                save_file='benchmark_result.txt'):
@@ -63,16 +67,15 @@ def benchmark_dataset_by_model(model_path=str(Path('backup/Raw_ECAPA/model/best_
     model.eval()
     print("Model Loaded time: ", time.time() - t0)
 
-
     # ===================================================
     folders = glob.glob(str(Path(root, '*')))
 
     for folder in tqdm(folders[:]):
         filepaths = glob.glob(f"{folder}/*.wav")
-    #     blist = read_blacklist(str(Path(folder).name),                
-    #                            duration_limit=1.0, 
-    #                            dB_limit=-10, 
-    #                            error_limit=0.5, 
+    #     blist = read_blacklist(str(Path(folder).name),
+    #                            duration_limit=1.0,
+    #                            dB_limit=-10,
+    #                            error_limit=0.5,
     #                            noise_limit=-10,
     #                            details_dir=details_dir)
     #     if not blist:
@@ -85,12 +88,14 @@ def benchmark_dataset_by_model(model_path=str(Path('backup/Raw_ECAPA/model/best_
         imposters = {}
 
         for fn in filepaths:
-            emb = model.embed_utterance(fn, eval_frames=100, num_eval=20, normalize=True)
+            emb = model.embed_utterance(
+                fn, eval_frames=100, num_eval=20, normalize=True)
             if fn not in files_emb_dict:
                 files_emb_dict[fn] = emb
 
         for pair in pairs:
-            match, score = check_matching(files_emb_dict[pair[0]], files_emb_dict[pair[1]], threshold)
+            match, score = check_matching(
+                files_emb_dict[pair[0]], files_emb_dict[pair[1]], threshold)
             if not match:
                 if pair[0] not in imposters:
                     imposters[pair[0]] = 0
@@ -98,11 +103,11 @@ def benchmark_dataset_by_model(model_path=str(Path('backup/Raw_ECAPA/model/best_
                     imposters[pair[1]] = 0
                 imposters[pair[0]] += 1
                 imposters[pair[1]] += 1
-        imposters_list = [k for k,v in imposters.items() if v > 0]
+        imposters_list = [k for k, v in imposters.items() if v > 0]
 
         with open(save_file, 'a+') as f:
             if len(imposters_list) > 0:
                 f.write(f"Folder:{folder}\n")
                 for imp in sorted(imposters_list):
                     f.write(f"[{imposters[imp]}/{len(filepaths)}] - {imp}\n")
-                f.write("//================//\n") 
+                f.write("//================//\n")

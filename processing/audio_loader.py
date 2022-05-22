@@ -67,15 +67,16 @@ def loadWAV(audio_source, audio_spec,
     Returns:
         ([ndarray]): audio_array
     '''
+    set_sample_rate = audio_spec['sample_rate']
+
     if isinstance(audio_source, str):
         if read_mode == 'sf':
-            audio, sample_rate = sf.read(audio_source)
+            audio, sr = sf.read(audio_source)
         else:
             audio_seg = AudioSegment.from_file(audio_source)
             sr = int(audio_seg.frame_rate)
 
-            assert sample_rate == sr, f"Sample rate is not same as desired value {sample_rate} and {sr}"
-            sample_rate = sr
+            assert set_sample_rate == sr, f"Sample rate is not same as desired value {set_sample_rate} and {sr}"
 
             if augment and ('time_domain' in augment_options['augment_chain']):
                 audio_seg = random_augment_audio(
@@ -97,9 +98,9 @@ def loadWAV(audio_source, audio_spec,
     # hoplength is 160, winlength is 400 -> total length  = winlength- hop_length + max_frames * hop_length
     # get the winlength 25ms, hop 10ms
 
-    n_hop_frames = audio_spec['hop_len'] * sample_rate
-    n_win_frames = audio_spec['win_len'] * sample_rate
-    max_audio = audio_spec['sentence_len'] * sample_rate
+    n_hop_frames = audio_spec['hop_len'] * set_sample_rate
+    n_win_frames = audio_spec['win_len'] * set_sample_rate
+    max_audio = audio_spec['sentence_len'] * set_sample_rate
 
     n_overlap_frames = n_win_frames - n_hop_frames
     max_frames = round((max_audio - n_overlap_frames) / n_hop_frames)

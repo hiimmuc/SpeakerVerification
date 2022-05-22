@@ -1,16 +1,20 @@
 device: "cpu"
 seed: 1001
+distributed: False
+mixedprec: False
+
+# Directories
 output_folder: !ref backup/<seed>
 save_folder: !ref <output_folder>/save
 train_log: !ref <output_folder>/train_log.txt
 
 ## Paths
 skip_prep: True
-data_folder: dataset/train_data/sample
-# train_annotation: !ref <save_folder>/metadata/train.txt
-# valid_annotation: !ref <save_folder>/metadata/dev.txt
-train_annotation: dataset/train_data/sample/metadata/train_sample.txt
-valid_annotation: dataset/train_data/sample/metadata/val_sample.txt
+data_folder: dataset/train_data/zalo_ai
+train_annotation: !ref <save_folder>/metadata/train.txt
+valid_annotation: !ref <save_folder>/metadata/dev.txt
+# train_annotation: dataset/train_data/sample/metadata/train_sample.txt
+# valid_annotation: dataset/train_data/sample/metadata/val_sample.txt
 
 verification_file: test_path.txt
 noise_folder: dataset/augment_data/
@@ -30,7 +34,7 @@ random_chunk: True
 
 # Audio parameters
 audio_spec:
-  sample_rate: 8000 # sample_rate
+  sample_rate: 16000 # sample_rate
   channels: 1
   sentence_len: 2.0 # seconds max_frames
   win_len: 0.025
