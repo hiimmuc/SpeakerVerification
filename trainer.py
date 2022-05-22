@@ -27,7 +27,7 @@ import torch.distributed as dist
 
 from callbacks.earlyStopping import *
 from dataloader import train_data_loader
-from model import SpeakerNet, WrappedModel
+from model import SpeakerEncoder, WrappedModel, ModelHandling
 from utils import tuneThresholdfromScore, read_log_file, plot_from_file, cprint
 import torch.distributed as dist
 import torch.multiprocessing as mp
@@ -53,7 +53,8 @@ def train(gpu, ngpus_per_node, args):
         args.output_folder, f"{args.model['name']}/{args.criterion['name']}/result")
 
     # TensorBoard
-    writer = SummaryWriter(log_dir=f"{result_save_path}/runs")
+    if args.gpu == 0:
+        writer = SummaryWriter(log_dir=f"{result_save_path}/runs")
     os.makedirs(f"{result_save_path}/runs", exist_ok=True)
 
     # init parameters
@@ -66,19 +67,42 @@ def train(gpu, ngpus_per_node, args):
     max_iter_size = len(train_loader) // args.nPerSpeaker
 
     # Load models
-    s = SpeakerNet(**dict(vars(args), T_max=max_iter_size))
+    args.gpu = gpu
+    s = SpeakerEncoder(**dict(vars(args), T_max=max_iter_size))
     # setup multi gpus
+    if args.distributed:
+        os.environ['MASTER_ADDR'] = 'localhost'
+        os.environ['MASTER_PORT'] = args.port
+
+        dist.init_process_group(
+            backend=args.distributed_backend,
+            world_size=ngpus_per_node, rank=args.gpu)
+
+        torch.cuda.set_device(args.gpu)
+        s.cuda(args.gpu)
+
+        s = torch.nn.parallel.DistributedDataParallel(
+            s, device_ids=[args.gpu], find_unused_parameters=True)
+
+        print('Loaded the model on GPU {:d}'.format(args.gpu))
+
+    else:
+        s = WrappedModel(s).cuda(args.gpu)
+
+    speaker_model = ModelHandling(s, **vars(args))
     # init parallelism create net-> load weight -> add to parallelism
-    try:
-        if torch.cuda.device_count() > 1:
-            print("Let's use", torch.cuda.device_count(), "GPUs!")
-            # dim = 0 [30, xxx] -> [10, ...], [10, ...], [10, ...] on 3 GPUs
-            s.__S__ = nn.DataParallel(
-                s.__S__, device_ids=[i for i in range(torch.cuda.device_count())])
-        s.__S__ = s.__S__.to(args.device)
-    except Exception as e:
-        print(e)
-        s.__S__ = s.__S__.to(args.device)
+
+    # NOTE: Data parallelism for multi-gpu in BETA
+    # try:
+    #     if torch.cuda.device_count() > 1:
+    #         print("Let's use", torch.cuda.device_count(), "GPUs!")
+    #         # dim = 0 [30, xxx] -> [10, ...], [10, ...], [10, ...] on 3 GPUs
+    #         s.__S__ = nn.DataParallel(
+    #             s.__S__, device_ids=[i for i in range(torch.cuda.device_count())])
+    #     s.__S__ = s.__S__.to(args.device)
+    # except Exception as e:
+    #     print(e)
+    #     s.__S__ = s.__S__.to(args.device)
 
     print(f"Using pretrained: {args.pretrained['use']}")
 
@@ -109,14 +133,15 @@ def train(gpu, ngpus_per_node, args):
             it = int(start_it)
         else:
             it = 1
+
     # NOTE: Priority: defined pretrained > previous state from logger > scratch
     if args.pretrained['use']:
-        s.loadParameters(args.pretrained['path'])
+        speaker_model.loadParameters(args.pretrained['path'])
         print("Model %s loaded!" % args.pretrained['path'])
         it = 1
         args.lr = start_lr
     elif prev_model_state:
-        s.loadParameters(prev_model_state)
+        speaker_model.loadParameters(prev_model_state)
         print("Model %s loaded from previous state!" % prev_model_state)
         args.lr = start_lr
         it = start_it
@@ -132,14 +157,15 @@ def train(gpu, ngpus_per_node, args):
     score_file = open(score_file_path, "a+")
 
     # summary settings
-    settings_file.write(
-        f'\n[TRAIN]------------------{time.strftime("%Y-%m-%d %H:%M:%S")}------------------\n')
-    score_file.write(
-        f'\n[TRAIN]------------------{time.strftime("%Y-%m-%d %H:%M:%S")}------------------\n')
-    # write the settings to settings file
-    for items in vars(args):
-        settings_file.write('%s %s\n' % (items, vars(args)[items]))
-    settings_file.flush()
+    if args.gpu == 0:
+        settings_file.write(
+            f'\n[TRAIN]------------------{time.strftime("%Y-%m-%d %H:%M:%S")}------------------\n')
+        score_file.write(
+            f'\n[TRAIN]------------------{time.strftime("%Y-%m-%d %H:%M:%S")}------------------\n')
+        # write the settings to settings file
+        for items in vars(args):
+            settings_file.write('%s %s\n' % (items, vars(args)[items]))
+        settings_file.flush()
 
     # define early stop
     if args.early_stopping:
@@ -151,22 +177,22 @@ def train(gpu, ngpus_per_node, args):
 
     timer = time.time()
     while True:
-        clr = [x['lr'] for x in s.__optimizer__.param_groups]
+        clr = [x['lr'] for x in speaker_model.__optimizer__.param_groups]
 
         print(time.strftime("%Y-%m-%d %H:%M:%S"), it,
               "[INFO] Training %s with LR %f ---" % (args.model['name'], max(clr)))
 
         # Train network
-        loss, train_acc = s.fit(loader=train_loader, epoch=it)
+        loss, train_acc = speaker_model.fit(loader=train_loader, epoch=it)
 
         # save best model
         if loss == min(min_loss, loss):
             cprint(
                 text=f"[INFO] Loss reduce from {min_loss} to {loss}. Save the best state", fg='y')
-            s.saveParameters(model_save_path + "/best_state.pt")
+            speaker_model.saveParameters(model_save_path + "/best_state.pt")
 
-            s.saveParameters(model_save_path +
-                             f"/best_state_top{top_count}.pt")
+            speaker_model.saveParameters(model_save_path +
+                                         f"/best_state_top{top_count}.pt")
             # to save top 3 of best_state
             top_count = (top_count + 1) if top_count <= 3 else 1
             if args.early_stopping:
@@ -176,9 +202,9 @@ def train(gpu, ngpus_per_node, args):
 
         # Validate and save
         if args.test_interval > 0 and it % args.test_interval == 0:
-            sc, lab, _ = s.evaluateFromList(args.test_list,
-                                            cohorts_path=None,
-                                            eval_frames=args.valid_annotation)
+            sc, lab, _ = speaker_model.evaluateFromList(args.test_list,
+                                                        cohorts_path=None,
+                                                        eval_frames=args.valid_annotation)
             result = tuneThresholdfromScore(sc, lab, [1, 0.1])['roc']
 
             min_eer = min(min_eer, result[1])
@@ -217,18 +243,29 @@ def train(gpu, ngpus_per_node, args):
         else:
             s.saveParameters(model_save_path + "/model_state_%06d.pt" % it)
 
+        if ("nsml" in sys.modules) and args.gpu == 0:
+            training_report = {}
+            training_report["summary"] = True
+            training_report["epoch"] = it
+            training_report["step"] = it
+            training_report["train_loss"] = loss
+
+            nsml.report(**training_report)
+
         if it >= args.number_of_epochs:
-            score_file.close()
-            settings_file.close()
-            writer.close()
+            if args.gpu == 0:
+                score_file.close()
+                settings_file.close()
+                writer.close()
             sys.exit(1)
 
         if args.early_stopping:
             early_stopping(loss)
             if early_stopping.early_stop:
-                score_file.close()
-                settings_file.close()
-                writer.close()
+                if args.gpu == 0:
+                    score_file.close()
+                    settings_file.close()
+                    writer.close()
                 sys.exit(1)
 
         if (time.time() - timer) // 60 >= args.ckpt_interval_minutes:
@@ -238,11 +275,12 @@ def train(gpu, ngpus_per_node, args):
             if len(ckpt_list) == 3:
                 ckpt_list.sort()
                 subprocess.call(f'rm -f {ckpt_list[-1]}', shell=True)
-            s.saveParameters(model_save_path + f"/ckpt_{current_time}.pt")
-
-        writer.add_scalar('Loss/train', loss, it)
-        writer.add_scalar('Accuracy/train', train_acc, it)
-        writer.add_scalar('Params/learning_rate', max(clr), it)
+            speaker_model.saveParameters(
+                model_save_path + f"/ckpt_{current_time}.pt")
+        if args.gpu == 0:
+            writer.add_scalar('Loss/train', loss, it)
+            writer.add_scalar('Accuracy/train', train_acc, it)
+            writer.add_scalar('Params/learning_rate', max(clr), it)
         it += 1
 
 

@@ -1,6 +1,7 @@
 device: "cpu"
 seed: 1001
 distributed: False
+distributed_backend: nccl
 mixedprec: False
 
 # Directories
