@@ -28,7 +28,7 @@ class TrainLoader(Dataset):
                  augment,
                  augment_options,
                  audio_spec,
-                 aug_folder='offline', random_chunk=True):
+                 aug_folder='offline', random_chunk=True, **kwargs):
 
         self.dataset_file_name = dataset_file_name
         self.audio_spec = audio_spec

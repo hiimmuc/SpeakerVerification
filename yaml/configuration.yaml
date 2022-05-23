@@ -1,8 +1,6 @@
-device: "cpu"
+device: "cuda"
+gpu: 0
 seed: 1001
-distributed: False
-distributed_backend: nccl
-mixedprec: False
 
 # Directories
 output_folder: !ref backup/<seed>
@@ -11,11 +9,11 @@ train_log: !ref <output_folder>/train_log.txt
 
 ## Paths
 skip_prep: True
-data_folder: dataset/train_data/sample
-# train_annotation: !ref <save_folder>/metadata/train.txt
-# valid_annotation: !ref <save_folder>/metadata/dev.txt
-train_annotation: dataset/train_data/sample/metadata/train_sample.txt
-valid_annotation: dataset/train_data/sample/metadata/val_sample.txt
+data_folder: dataset/train_data/zalo_ai
+train_annotation: !ref <save_folder>/metadata/train.txt
+valid_annotation: !ref <save_folder>/metadata/dev.txt
+# train_annotation: dataset/train_data/sample/metadata/train_sample.txt
+# valid_annotation: dataset/train_data/sample/metadata/val_sample.txt
 
 verification_file: test_path.txt
 noise_folder: dataset/augment_data
@@ -25,17 +23,17 @@ save_model_last: True
 
 # Training parameters
 number_of_epochs: 10 # max_epoch
-batch_size: 16 # batch_size
+batch_size: 8 # batch_size
 lr: 0.001
 base_lr: 0.00000001 # min_lr
 max_lr: !ref <lr> # max lr for callbacks
-step_size: 65000 # step size equal [2, 4, 6, 8] * len(train dataset) / (batch_size * n_pgu * n_spk)
+step_size: 10 # depends on the callbacks, step size equal [2, 4, 6, 8] * len(train dataset) / (batch_size * n_pgu * n_spk)
 shuffle: False
 random_chunk: True
 
 # Audio parameters
 audio_spec:
-  sample_rate: 8000 # sample_rate
+  sample_rate: 16000 # sample_rate
   channels: 1
   sentence_len: 2.0 # seconds max_frames
   win_len: 0.025
@@ -48,13 +46,13 @@ features: raw
 lib: nnaudio
 
 # Number of speakers
-nClasses: 120 #1211 for vox1  # 5994 for vox2, 7205 for vox1+vox2
+nClasses: 392 #1211 for vox1  # 5994 for vox2, 7205 for vox1+vox2
 
 # dataloader_options
 dataloader_options:
   batch_size: !ref <batch_size>
   shuffle: !ref <shuffle>
-  num_workers: 2
+  num_workers: 0
   max_seg_per_spk: 1000
   nPerSpeaker: 2
   split_ratio: -1
@@ -64,11 +62,11 @@ augment: False
 augment_options:
   augment_paths:
     musan: !ref <noise_folder>/musan_split
-    noise_vad: !ref <noise_folder>/noise_vad
+    noise_vad: !ref <noise_folder>/NonverbalVocalization
     rirs: !ref <noise_folder>/RIRS_NOISES
   augment_chain: ["env_corrupt", "time_domain", "spec_domain"]
   noise_sets: ["noise", "speech", "music", "noise_vad", "noise_rirs"]
-  noise_proportion: [0.0, 0.0, 0.0, 0.0, 1.0]
+  noise_proportion: [0.1, 0.1, 0.1, 0.2, 0.5]
   noise_snr:
     noise: [0, 5]
     speech: [3, 20]
@@ -118,14 +116,14 @@ callbacks:
   name: steplr
   base_lr: !ref <base_lr>
   max_lr: !ref <max_lr>
-  step_size: !ref <step_size>
+  # step_size: !ref <step_size>
 
 early_stopping: False
 es_patience: 15
 
 # Using pretrain
 pretrained:
-  use: True
+  use: False
   path: backup/Raw_ECAPA/AAmSoftmax/model/best_state.pt
 
 ## testing

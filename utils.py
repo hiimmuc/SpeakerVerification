@@ -7,7 +7,6 @@ from argparse import Namespace
 
 import numpy as np
 
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -15,10 +14,8 @@ import torch.nn.functional as F
 import yaml
 from matplotlib import pyplot as plt
 
-
 from sklearn import metrics
 from sklearn.metrics import precision_recall_curve
-
 
 from operator import itemgetter
 

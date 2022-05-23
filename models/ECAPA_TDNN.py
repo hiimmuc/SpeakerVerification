@@ -392,7 +392,7 @@ class ECAPA_TDNN(torch.nn.Module):
         assert len(channels) == len(dilations)
         self.channels = channels
         self.aug = kwargs['augment']
-        self.aug_chain = kwargs['augment_chain']
+        self.aug_chain = kwargs['augment_options']['augment_chain']
         n_mels = kwargs['n_mels']
         input_size = n_mels
 

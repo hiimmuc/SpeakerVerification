@@ -64,24 +64,24 @@ if __name__ == '__main__':
                         help='cuda or cpu')
     parser.add_argument('--distributed', 
                         action='store_true', 
-                        default=True, 
+                        default=False, 
                         help='Decide whether to use multi gpus')
+    parser.add_argument('--distributed_backend',
+                        type=str,
+                        default="nccl",
+                        help='nccl or gloo or mpi')
     
     ## Distributed and mixed precision training
     parser.add_argument('--port',           
                         type=str,   
                         default="8888", 
-                        help='Port for distributed training, input as text');
+                        help='Port for distributed training, input as text')
     parser.add_argument('--mixedprec',      
                         dest='mixedprec',   
                         action='store_true', 
+                        default=False,
                         help='Enable mixed precision training')
 
-
-    parser.add_argument('--nDataLoaderThread',
-                        type=int,
-                        default=2,
-                        help='# of loader threads')    
 
     parser.add_argument('--augment',
                         action='store_true',

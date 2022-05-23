@@ -36,13 +36,14 @@ class WrappedModel(nn.Module):
 
 class SpeakerEncoder(nn.Module):
     
-    def __init__(self, model, criterion, classifier, optimizer, nPerSpeaker, features , device, include_top=False, ** kwargs) -> None:
+    def __init__(self, model, criterion, classifier, optimizer, features , device, include_top=False, ** kwargs) -> None:
         super(SpeakerEncoder, self).__init__()
         self.model = model
         self.criterion = criterion
         self.classifier = classifier
         self.optimizer = optimizer
         self.device = device
+        self.n_mels = kwargs['n_mels']
         self.augment = kwargs['augment']
         self.augment_chain = kwargs['augment_options']['augment_chain']
         
@@ -56,10 +57,8 @@ class SpeakerEncoder(nn.Module):
         
         
         SpeakerNetModel = importlib.import_module(
-            'models.' + self.model_name).__getattribute__('MainModel')
+            'models.' + self.model['name']).__getattribute__('MainModel')
         self.__S__ = SpeakerNetModel(nOut=self.model['nOut'],
-                                     augment=self.augment,
-                                     augment_chain=self.augment_chain,
                                      **kwargs).to(self.device)
         # # necessaries:
         # self.aug = kwargs['augment']
@@ -68,12 +67,16 @@ class SpeakerEncoder(nn.Module):
         
         
         LossFunction = importlib.import_module(
-            'losses.' + criterion).__getattribute__(f"{criterion}")
-        self.__L__ = LossFunction(**kwargs).to(self.device)
-        
+            'losses.' + self.criterion['name']).__getattribute__(f"{self.criterion['name']}")
+
+        self.__L__ = LossFunction(nOut=self.model['nOut'], 
+                                  margin=self.criterion['margin'], 
+                                  scale=self.criterion['scale'],
+                                  **kwargs).to(self.device)
+        #NOTE: nClasses is defined
         self.test_normalize = self.__L__.test_normalize
         
-        self.nPerSpeaker = nPerSpeaker
+        self.nPerSpeaker = kwargs['dataloader_options']['nPerSpeaker']
         
         self.include_top = include_top
         
@@ -84,7 +87,7 @@ class SpeakerEncoder(nn.Module):
         ####
         nb_params = sum([param.view(-1).size()[0]
                         for param in self.__S__.parameters()])
-        print(f"Initialize encoder model {self.model_name}: {nb_params:,} params")
+        print(f"Initialize encoder model {self.model['name']}: {nb_params:,} params")
         print("Embedding normalize: ", self.__L__.test_normalize)
         
     def forward(self, data, label=None):
@@ -99,8 +102,7 @@ class SpeakerEncoder(nn.Module):
             feat.append(outp)
 
         feat = torch.stack(feat, dim=1).squeeze()
-        label = torch.LongTensor(label).to(self.device)
-        
+                
         ## Beta for the recognition task
         # if self.include_top:
         #     outp = self.fc(self.__S__.forward(data))
@@ -141,19 +143,26 @@ class ModelHandling(object):
         
         Optimizer = importlib.import_module(
             'optimizer.' + optimizer['name']).__getattribute__(f"{optimizer['name']}")
-        self.__optimizer__ = Optimizer(self.__model__.parameters(), **kwargs)
+        self.__optimizer__ = Optimizer(self.__model__.parameters(),
+                                       weight_decay=optimizer['weight_decay'],
+                                       lr_decay=optimizer['lr_decay'],
+                                       **kwargs)
 
         self.callback = callbacks
 
         if self.callback['name'] in ['steplr', 'cosinelr', 'cycliclr']:
             Scheduler = importlib.import_module(
                 'callbacks.torch_callbacks').__getattribute__(f"{self.callback['name'].lower()}")
-            self.__scheduler__, self.lr_step = Scheduler(self.__optimizer__, **dict(kwargs, T_max=self.T_max))
+            self.__scheduler__, self.lr_step = Scheduler(self.__optimizer__,                                                          
+                                                         lr_decay=optimizer['lr_decay'], **dict(kwargs, T_max=self.T_max))
         elif self.callback['name'] == 'reduceOnPlateau':
             Scheduler = importlib.import_module(
                 'callbacks.' + callbacks).__getattribute__('LRScheduler')
-            self.__scheduler__ = Scheduler(
-                self.__optimizer__, patience=self.callback['step_size'], min_lr=self.callback['base_lr'], factor=0.95)
+            self.__scheduler__ = Scheduler(self.__optimizer__, 
+                                           step_size=self.callback['step_size'], 
+                                           lr_decay=optimizer['lr_decay'], 
+                                           patience=self.callback['step_size'], 
+                                           min_lr=self.callback['base_lr'], factor=0.95)
             self.lr_step = 'epoch'
         
         assert self.lr_step in ['epoch', 'iteration']
@@ -185,21 +194,22 @@ class ModelHandling(object):
         for (data, data_label) in loader_bar:
             data = data.transpose(0, 1).to(self.device)
             label = torch.LongTensor(data_label).to(self.device)
+            
             self.__model__.zero_grad()
             
             if self.mixedprec:
                 with autocast():
-                    nloss, prec1 = self.__model__(data, label)
+                    nloss, prec1 = self.__model__.forward(data, label)
                 self.scaler.scale(nloss).backward()
                 self.scaler.step(self.__optimizer__)
                 self.scaler.update()
             else:
-                nloss, prec1 = self.__model__(data, label)
-                nloss.backward()
+                nloss, prec1 = self.__model__.forward(data, label)
+                nloss.mean().backward()
                 self.__optimizer__.step()
 
-            loss += nloss.detach().cpu().item()
-            top1 += prec1.detach().cpu().item()
+            loss += nloss.detach().cpu()
+            top1 += prec1.detach().cpu()
             counter += 1
             index += stepsize
 

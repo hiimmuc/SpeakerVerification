@@ -54,7 +54,7 @@ def random_augment_audio(audio_seg, setting):
 def loadWAV(audio_source, audio_spec,
             evalmode=True, num_eval=10,
             augment=False, augment_options=None, target_db=None,
-            read_mode='pydub', random_chunk=True, ** kwargs):
+            read_mode='sf', random_chunk=True, ** kwargs):
     '''Load audio form .wav file and return as the np array
 
     Args:
@@ -170,8 +170,9 @@ class AugmentWAV(object):
         self.noiselist = {}
 
         print("Augment set information...")
+        # dataset/augment_data/musan_split/ + noise/free-sound/noise-free-sound-0000.wav
         musan_noise_files = glob.glob(
-            os.path.join(self.musan_path, '*/*/*/*.wav'))
+            os.path.join(self.musan_path, '*/*/*.wav'))
 
         print(f"Using {len(musan_noise_files)} files of MUSAN noise")
 

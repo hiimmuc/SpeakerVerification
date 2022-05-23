@@ -344,19 +344,19 @@ class DataGenerator():
         # write 2 files
         print("Generating metadata files...")
         os.makedirs(Path(root.parent / 'metadata'), exist_ok=True)
-        with open(Path(root.parent, f'metadata/train_{root.parent.name}.txt'), 'w') as wf:
+        with open(Path(root.parent, f'metadata/train.txt'), 'w') as wf:
             random.shuffle(train_filepaths_list)
             wf.writelines(train_filepaths_list)
-        with open(Path(root.parent, f'metadata/val_{root.parent.name}.txt'), 'w') as wf:
+        with open(Path(root.parent, f'metadata/val.txt'), 'w') as wf:
             random.shuffle(val_pairs)
             wf.writelines(val_pairs)
 
         # copy to save dir
         os.makedirs(Path(self.args.train_annotation).parent, exist_ok=True)
         subprocess.call(
-            f"cp {Path(root.parent, f'metadata/train_{root.parent.name}.txt')} {Path(self.args.train_annotation)}", shell=True)
+            f"cp {Path(root.parent, f'metadata/train.txt')} {str(Path(self.args.train_annotation))}", shell=True)
         subprocess.call(
-            f"cp {Path(root.parent, f'metadata/val_{root.parent.name}.txt')} {Path(self.args.valid_annotation)}", shell=True)
+            f"cp {Path(root.parent, f'metadata/val.txt')} {str(Path(self.args.valid_annotation))}", shell=True)
         # some information
         print("Valid speakers:", len(valid_spks))
         print("Valid audio files:", len(train_filepaths_list))
@@ -427,7 +427,7 @@ try:
             vad_engine.detect(audio_path)
         print("Done!")
 except:
-    print('can not impor vad')
+    print('can not import vad_tools')
 
 parser = argparse.ArgumentParser(description="Data preparation")
 if __name__ == '__main__':

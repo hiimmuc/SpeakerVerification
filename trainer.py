@@ -63,8 +63,8 @@ def train(gpu, ngpus_per_node, args):
     min_eer = float("inf")
 
     # Initialise data loader
-    train_loader = train_data_loader(args.train_annotation, **vars(args))
-    max_iter_size = len(train_loader) // args.nPerSpeaker
+    train_loader = train_data_loader(args)
+    max_iter_size = len(train_loader) // args.dataloader_options['nPerSpeaker']
 
     # Load models
     args.gpu = gpu
