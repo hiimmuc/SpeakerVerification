@@ -12,6 +12,7 @@ from processing.audio_loader import loadWAV, AugmentWAV
 from utils import round_down, worker_init_fn
 import torch.distributed as dist
 from utils import read_config
+from pathlib import Path
 
 
 def round_down(num, divisor):
@@ -27,14 +28,17 @@ class TrainLoader(Dataset):
                  augment,
                  augment_options,
                  audio_spec,
-                 aug_folder='offline'):
+                 aug_folder='offline', random_chunk=True):
 
         self.dataset_file_name = dataset_file_name
         self.audio_spec = audio_spec
-        self.augment_options = augment_options
+
+        self.random_chunk = random_chunk
         self.max_frames = round(audio_spec['sample_rate'] * (
             audio_spec['sentence_len'] - audio_spec['win_len']) / audio_spec['hop_len'])
+
         self.augment = augment
+        self.augment_options = augment_options
 
         self.sr = audio_spec['sample_rate']
 
@@ -44,11 +48,14 @@ class TrainLoader(Dataset):
         self.augment_chain = augment_options['augment_chain']
 
         if self.augment and ('env_corrupt' in self.augment_chain):
-            if all(os.path.exists(path) for path in [self.musan_path, self.rir_path]):
+
+            if all(os.path.exists(Path(path)) for path in self.augment_paths.values()):
                 self.augment_engine = AugmentWAV(
                     augment_options, audio_spec, target_db=None)
             else:
                 self.augment_engine = None
+                self.augment = False
+        print("Augment available: ", self.augment)
 
         # Read Training Files...
         with open(dataset_file_name) as dataset_file:
@@ -83,7 +90,8 @@ class TrainLoader(Dataset):
             audio = loadWAV(audio_file, self.audio_spec,
                             evalmode=False,
                             augment=self.augment,
-                            augment_options=self.augment_options)
+                            augment_options=self.augment_options,
+                            random_chunk=self.random_chunk)
 
             # env corrupt augment
             if self.augment and ('env_corrupt' in self.augment_chain) and (self.aug_folder == 'online'):
@@ -257,7 +265,10 @@ class test_dataset_loader(Dataset):
 
     def __getitem__(self, index):
         audio = loadWAV(os.path.join(
-            self.test_path, self.test_list[index]), self.max_frames, evalmode=True, num_eval=self.num_eval)
+            self.test_path, self.test_list[index]),
+            self.max_frames,
+            evalmode=True,
+            num_eval=self.num_eval, random_chunk=False)
         return torch.FloatTensor(audio), self.test_list[index]
 
     def __len__(self):
@@ -269,25 +280,6 @@ if __name__ == '__main__':
     # Test for data loader
     # YAML
     parser.add_argument('--config', type=str, default=None)
-
-    # control flow
-    parser.add_argument('--do_train', action='store_true', default=False)
-    parser.add_argument('--do_infer', action='store_true', default=False)
-    parser.add_argument('--do_export', action='store_true', default=False)
-
-    # Infer mode
-    parser.add_argument('--eval',
-                        dest='eval',
-                        action='store_true',
-                        help='Eval only')
-    parser.add_argument('--test',
-                        dest='test',
-                        action='store_true',
-                        help='Test only')
-    parser.add_argument('--predict',
-                        dest='predict',
-                        action='store_true',
-                        help='Predict')
 
     # Device settings
     parser.add_argument('--device',
@@ -308,11 +300,6 @@ if __name__ == '__main__':
                         dest='mixedprec',
                         action='store_true',
                         help='Enable mixed precision training')
-
-    parser.add_argument('--nDataLoaderThread',
-                        type=int,
-                        default=2,
-                        help='# of loader threads')
 
     parser.add_argument('--augment',
                         action='store_true',
@@ -347,5 +334,5 @@ if __name__ == '__main__':
     for (sample, label) in tqdm(train_loader):
         sample = sample.transpose(0, 1)
         for inp in sample:
-            print(inp.size())
+            print(inp.size(), inp.reshape(-1, inp.size()[-1]).size())
         print(sample.size(), label.size())

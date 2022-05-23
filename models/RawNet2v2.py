@@ -51,7 +51,8 @@ class RawNetBasicBlock(nn.Module):
         #####
         if inplanes != planes:  # if change in number of filters
             self.shortcut = nn.Sequential(
-                nn.Conv1d(inplanes, planes, kernel_size=1, stride=1, bias=False)
+                nn.Conv1d(inplanes, planes, kernel_size=1,
+                          stride=1, bias=False)
             )
 
     def forward(self, x):
@@ -105,13 +106,10 @@ class RawNet2(nn.Module):
             nb_filters,
             code_dim=512,
             in_channels=1,
-            n_mels=64,
             log_input=True,
-        
             **kwargs):
         super(RawNet2, self).__init__()
         self.inplanes = nb_filters[0]
-        self.n_mels = n_mels
         self.log_input = log_input
         #####
         # first layers before residual blocks
@@ -149,7 +147,8 @@ class RawNet2(nn.Module):
         #####
         # speaker embedding layer
         #####
-        self.fc = nn.Linear(nb_filters[5] * 2, code_dim)  # speaker embedding layer
+        # speaker embedding layer
+        self.fc = nn.Linear(nb_filters[5] * 2, code_dim)
         self.lrelu = nn.LeakyReLU(0.3)  # keras style
 
         #####
@@ -168,8 +167,6 @@ class RawNet2(nn.Module):
         #####
         # gru mode
         #####
-        
-        
 
     def _make_layer(self, block, planes, nb_layer, downsample_all=False):
         if downsample_all:
@@ -207,7 +204,8 @@ class RawNet2(nn.Module):
         x = self.lrelu(x)
         w = self.attention(x)
         m = torch.sum(x * w, dim=-1)
-        s = torch.sqrt((torch.sum((x ** 2) * w, dim=-1) - m ** 2).clamp(min=1e-5))
+        s = torch.sqrt(
+            (torch.sum((x ** 2) * w, dim=-1) - m ** 2).clamp(min=1e-5))
         x = torch.cat([m, s], dim=1)
         x = x.view(x.size(0), -1)
 
@@ -215,7 +213,7 @@ class RawNet2(nn.Module):
         # speaker embedding layer
         #####
         x = self.fc(x)
-        x= x.squeeze()
+        x = x.squeeze()
 
         return x
 
@@ -225,7 +223,7 @@ def MainModel(nOut=512, **kwargs):
     nb_filters = [128, 128, 256, 256, 512, 512]
 #     layers = [1, 1, 3, 4, 6, 3]
 #     nb_filters = [128, 128, 256, 256, 256, 256]
-    
+
     model = RawNet2(
         RawNetBasicBlock,
         layers=layers,

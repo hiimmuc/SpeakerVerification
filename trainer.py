@@ -68,7 +68,7 @@ def train(gpu, ngpus_per_node, args):
 
     # Load models
     args.gpu = gpu
-    s = SpeakerEncoder(**dict(vars(args), T_max=max_iter_size))
+    s = SpeakerEncoder(**vars(args))
     # setup multi gpus
     if args.distributed:
         os.environ['MASTER_ADDR'] = 'localhost'
@@ -89,7 +89,7 @@ def train(gpu, ngpus_per_node, args):
     else:
         s = WrappedModel(s).cuda(args.gpu)
 
-    speaker_model = ModelHandling(s, **vars(args))
+    speaker_model = ModelHandling(s, **dict(vars(args), T_max=max_iter_size))
     # init parallelism create net-> load weight -> add to parallelism
 
     # NOTE: Data parallelism for multi-gpu in BETA

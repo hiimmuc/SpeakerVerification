@@ -375,7 +375,6 @@ class ECAPA_TDNN(torch.nn.Module):
     def __init__(
         self,
         input_size=80,
-        device="cpu",
         lin_neurons=192,
         activation=torch.nn.GELU,
         channels=[1024, 1024, 1024, 1024, 3072],
@@ -394,9 +393,6 @@ class ECAPA_TDNN(torch.nn.Module):
         self.channels = channels
         self.aug = kwargs['augment']
         self.aug_chain = kwargs['augment_chain']
-        # sample_rate = int(kwargs['sample_rate'])
-        # hoplength = int(10e-3 * sample_rate)
-        # winlength = int(25e-3 * sample_rate)
         n_mels = kwargs['n_mels']
         input_size = n_mels
 

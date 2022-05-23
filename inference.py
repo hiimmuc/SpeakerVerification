@@ -11,21 +11,29 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn.functional as F
-from model import SpeakerNet
+from model import SpeakerEncoder, WrappedModel, ModelHandling
+
 from sklearn.metrics import (accuracy_score, classification_report,
                              confusion_matrix, fbeta_score, roc_curve)
 from tqdm import tqdm
 from utils import ComputeErrorRates, ComputeMinDcf, tuneThresholdfromScore
 
 # ---------------------------------//
+# Evaluation code - must run on single GPU
 
 
 def inference(args):
-    model = SpeakerNet(**vars(args))
+    net = SpeakerEncoder(**vars(args))
+    max_iter_size = args.step_size
+    model = ModelHandling(
+        net, **dict(vars(args), T_max=max_iter_size))
+
     model_save_path = os.path.join(
-        args.save_path, f"{args.model}/{args.criterion}/model")
+        args.output_folder, f"{args.model['name']}/{args.criterion['name']}/model")
+
     result_save_path = os.path.join(
-        args.save_path, f"{args.model}/{args.criterion}/result")
+        args.output_folder, f"{args.model['name']}/{args.criterion['name']}/result")
+
     # Write args to score_file
     settings_file = open(result_save_path + '/settings.txt', 'a+')
     score_file = open(result_save_path + "/Inference_log.txt", "a+")
@@ -51,6 +59,7 @@ def inference(args):
         model_files = glob.glob(os.path.join(
             model_save_path, 'model_state_*.pt'))
         chosen_model_state = model_files[-1]
+
     # duplicate best state to avoid missing best
     if 'best_state' in chosen_model_state and args.eval is True:
         ver = 0
@@ -75,11 +84,21 @@ def inference(args):
 
     # Evaluation from list
     if args.eval is True:
+
+        # self,
+        # listfilename,
+        # distributed,
+        # dataloader_options,
+        # test_loader = None,
+        # cohorts_path = 'checkpoint/dump_cohorts.npy',
+        # num_eval = 10,
+        # scoring_mode = 'cosine', **kwargs
         sc, lab, trials = model.evaluateFromList(
             args.eval_list,
+            dataloader_options=args.dataloader_options,
             cohorts_path=args.cohorts_path,
-            print_interval=1,
             eval_frames=args.eval_frames,
+            num_eval=args.num_eval,
             scoring_mode=scoring_mode)
 
         target_fa = np.linspace(5, 0, num=50)

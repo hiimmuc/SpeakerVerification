@@ -11,31 +11,31 @@ train_log: !ref <output_folder>/train_log.txt
 
 ## Paths
 skip_prep: True
-data_folder: dataset/train_data/zalo_ai
-train_annotation: !ref <save_folder>/metadata/train.txt
-valid_annotation: !ref <save_folder>/metadata/dev.txt
-# train_annotation: dataset/train_data/sample/metadata/train_sample.txt
-# valid_annotation: dataset/train_data/sample/metadata/val_sample.txt
+data_folder: dataset/train_data/sample
+# train_annotation: !ref <save_folder>/metadata/train.txt
+# valid_annotation: !ref <save_folder>/metadata/dev.txt
+train_annotation: dataset/train_data/sample/metadata/train_sample.txt
+valid_annotation: dataset/train_data/sample/metadata/val_sample.txt
 
 verification_file: test_path.txt
-noise_folder: dataset/augment_data/
+noise_folder: dataset/augment_data
 
 ckpt_interval_minutes: 15 # save checkpoint every N min, -1 to turn off
 save_model_last: True
 
 # Training parameters
 number_of_epochs: 10 # max_epoch
-batch_size: 32 # batch_size
+batch_size: 16 # batch_size
 lr: 0.001
-base_lr: 0.00000001
-max_lr: !ref <lr>
-step_size: 65000
+base_lr: 0.00000001 # min_lr
+max_lr: !ref <lr> # max lr for callbacks
+step_size: 65000 # step size equal [2, 4, 6, 8] * len(train dataset) / (batch_size * n_pgu * n_spk)
 shuffle: False
 random_chunk: True
 
 # Audio parameters
 audio_spec:
-  sample_rate: 16000 # sample_rate
+  sample_rate: 8000 # sample_rate
   channels: 1
   sentence_len: 2.0 # seconds max_frames
   win_len: 0.025
@@ -64,11 +64,11 @@ augment: False
 augment_options:
   augment_paths:
     musan: !ref <noise_folder>/musan_split
-    noise_vad: !ref <noise_folder>/voice_vad
+    noise_vad: !ref <noise_folder>/noise_vad
     rirs: !ref <noise_folder>/RIRS_NOISES
   augment_chain: ["env_corrupt", "time_domain", "spec_domain"]
   noise_sets: ["noise", "speech", "music", "noise_vad", "noise_rirs"]
-  noise_proportion: [0.1, 0.1, 0.1, 0.2, 0.5]
+  noise_proportion: [0.0, 0.0, 0.0, 0.0, 1.0]
   noise_snr:
     noise: [0, 5]
     speech: [3, 20]
@@ -144,3 +144,4 @@ log_test_files:
   com: !ref <verification_file>.replace('.txt', '_results.txt')
 # initial_model test:
 initial_model_infer: backup/Raw_ECAPA/model/best_state.model
+cohorts_path: !ref <save_folder>/cohort_<model[name]>.np

@@ -43,6 +43,8 @@ class SpeakerEncoder(nn.Module):
         self.classifier = classifier
         self.optimizer = optimizer
         self.device = device
+        self.augment = kwargs['augment']
+        self.augment_chain = kwargs['augment_options']['augment_chain']
         
         if features.lower() in ['mfcc', 'melspectrogram']:
             Features_extractor = importlib.import_module(
@@ -55,8 +57,16 @@ class SpeakerEncoder(nn.Module):
         
         SpeakerNetModel = importlib.import_module(
             'models.' + self.model_name).__getattribute__('MainModel')
-        self.__S__ = SpeakerNetModel(**kwargs).to(self.device)
-
+        self.__S__ = SpeakerNetModel(nOut=self.model['nOut'],
+                                     augment=self.augment,
+                                     augment_chain=self.augment_chain,
+                                     **kwargs).to(self.device)
+        # # necessaries:
+        # self.aug = kwargs['augment']
+        # self.aug_chain = kwargs['augment_chain']
+        # nOut n_mels
+        
+        
         LossFunction = importlib.import_module(
             'losses.' + criterion).__getattribute__(f"{criterion}")
         self.__L__ = LossFunction(**kwargs).to(self.device)
@@ -106,8 +116,10 @@ class SpeakerEncoder(nn.Module):
 
 
 class ModelHandling(object):
-    def __init__(self, encoder_model, features='raw', criterion='Softmax', 
-                 optimizer='adam', callbacks='steplr',  device='cuda', max_epoch='500', 
+    def __init__(self, encoder_model, 
+                 optimizer='adam', 
+                 callbacks='steplr',  
+                 device='cuda',
                  gpu=0,  mixedprec=False, **kwargs):
         
         # take only args
@@ -116,8 +128,6 @@ class ModelHandling(object):
         self.kwargs = kwargs
         self.device = torch.device(device)
         self.save_path = self.kwargs['save_folder']
-
-        self.max_epoch = max_epoch
         
         self.T_max = 0 if 'T_max' not in self.kwargs else self.kwargs['T_max']
 
@@ -226,7 +236,6 @@ class ModelHandling(object):
                          listfilename,
                          distributed,
                          dataloader_options,
-                         test_loader=None,
                          cohorts_path='checkpoint/dump_cohorts.npy',
                          num_eval=10,
                          scoring_mode='cosine', **kwargs):

@@ -65,7 +65,7 @@ if __name__ == '__main__':
     parser.add_argument('--distributed', 
                         action='store_true', 
                         default=True, 
-                        help='Decise wether use multi gpus')
+                        help='Decide whether to use multi gpus')
     
     ## Distributed and mixed precision training
     parser.add_argument('--port',           
@@ -139,8 +139,7 @@ if __name__ == '__main__':
     print('Python Version:', sys.version)
     print('PyTorch Version:', torch.__version__)
     print('Number of GPUs:', torch.cuda.device_count())
-    print(args)
     
-    # main(args)
+    main(args)
     
     #######################################################################################
