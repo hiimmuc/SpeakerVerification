@@ -46,12 +46,14 @@ warnings.simplefilter("ignore")
 
 
 def train(gpu, ngpus_per_node, args):
+    args.gpu = gpu
+    # paths
     model_save_path = os.path.join(
         args.output_folder, f"{args.model['name']}/{args.criterion['name']}/model")
 
     result_save_path = os.path.join(
-        args.output_folder, f"{args.model['name']}/{args.criterion['name']}/result")
-
+        args.output_folder, f"{args.model['name']}/{args.criterion['name']}/result")    
+    
     # TensorBoard
     if args.gpu == 0:
         writer = SummaryWriter(log_dir=f"{result_save_path}/runs")
@@ -67,7 +69,6 @@ def train(gpu, ngpus_per_node, args):
     max_iter_size = len(train_loader) // args.dataloader_options['nPerSpeaker']
 
     # Load models
-    args.gpu = gpu
     s = SpeakerEncoder(**vars(args))
     # setup multi gpus
     if args.distributed:
