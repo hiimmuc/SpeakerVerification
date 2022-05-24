@@ -1,3 +1,4 @@
+import csv
 import argparse
 import glob
 import hashlib
@@ -312,22 +313,22 @@ class DataGenerator():
 
             # write train file
             for train_filepath in train_filepaths:
-                label = str(train_filepath.parent.stem.split('-')[0])
-                train_filepaths_list.append(f"{label} {str(train_filepath)}\n")
+                spkID = str(train_filepath.parent.stem.split('-')[0])
+                ext = str(train_filepath).split('.')[-1]
+                duration, rate = get_audio_properties(str(train_filepath))
+                train_filepaths_list.append([spkID, str(train_filepath), duration, ext]) # add more here
 
             val_filepaths_list.append(val_filepaths)
 
-        # gather val files
+        # gathering val files
         val_pairs = []
         for val_filepaths in tqdm(val_filepaths_list, desc="Generating validation file..."):
             for i in range(len(val_filepaths) - 1):
                 for j in range(i + 1, len(val_filepaths)):
+                    # positive pairs
                     label = '1'
-                    positive_pair = label + ' ' + \
-                        str(val_filepaths[i]) + ' ' + \
-                        str(val_filepaths[j]) + '\n'
-                    val_pairs.append(positive_pair)
-
+                    val_pairs.append([label, str(val_filepaths[i]), str(val_filepaths[j])])
+                    
                     label = '0'
                     while True:
                         x = random.randint(0, len(val_filepaths_list) - 1)
@@ -337,26 +338,30 @@ class DataGenerator():
                             break
 
                     y = random.randint(0, len(val_filepaths_list[x]) - 1)
-                    negative_pair = label + ' ' + \
-                        str(val_filepaths[i]) + ' ' + \
-                        str(val_filepaths_list[x][y]) + '\n'
-                    val_pairs.append(negative_pair)
-        # write 2 files
+                    # negative pairs
+                    val_pairs.append([label, str(val_filepaths[i]), str(val_filepaths_list[x][y])])
+                    
+        # write train and val files
         print("Generating metadata files...")
         os.makedirs(Path(root.parent / 'metadata'), exist_ok=True)
-        with open(Path(root.parent, f'metadata/train.txt'), 'w') as wf:
-            random.shuffle(train_filepaths_list)
-            wf.writelines(train_filepaths_list)
-        with open(Path(root.parent, f'metadata/val.txt'), 'w') as wf:
-            random.shuffle(val_pairs)
-            wf.writelines(val_pairs)
+        with open(Path(root.parent, f'metadata/train.csv'), 'w', newline='') as wf:
+            spamwriter = csv.writer(wf, delimiter=',')
+            spamwriter.writerow(['ID', 'path', 'duration', 'audio_format'])
+            for spkid, path, duration, audio_format in train_filepaths_list:
+                  spamwriter.writerow([spkid, path, duration, audio_format])
+
+        with open(Path(root.parent, f'metadata/valid.csv'), 'w', newline='') as wf:
+            spamwriter = csv.writer(wf, delimiter=',')
+            spamwriter.writerow(['label', 'audio1', 'audio1'])
+            for label, audio1, audio1 in val_pairs:
+                  spamwriter.writerow([label, audio1, audio1])
 
         # copy to save dir
         os.makedirs(Path(self.args.train_annotation).parent, exist_ok=True)
         subprocess.call(
-            f"cp {Path(root.parent, f'metadata/train.txt')} {str(Path(self.args.train_annotation))}", shell=True)
+            f"cp {Path(root.parent, f'metadata/train.csv')} {str(Path(self.args.train_annotation))}", shell=True)
         subprocess.call(
-            f"cp {Path(root.parent, f'metadata/val.txt')} {str(Path(self.args.valid_annotation))}", shell=True)
+            f"cp {Path(root.parent, f'metadata/valid.csv')} {str(Path(self.args.valid_annotation))}", shell=True)
         # some information
         print("Valid speakers:", len(valid_spks))
         print("Valid audio files:", len(train_filepaths_list))
@@ -500,7 +505,7 @@ if __name__ == '__main__':
     if args.convert:
         data_generator.convert()
     if args.generate:
-        data_generator.generate_metadata(
+        valid_spks, invalid_spks = data_generator.generate_metadata(
             num_spks=args.num_spks, lower_num=args.lower_num, upper_num=args.upper_num)
     if args.restore:
         restore_dataset(args.data_folder)

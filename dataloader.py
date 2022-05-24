@@ -1,18 +1,20 @@
 import os
+import csv
 import argparse
 import time
 
 import numpy as np
 from sklearn.utils import shuffle
+
 import torch
 from torch.utils.data import DataLoader, Dataset
-from tqdm.auto import tqdm
+import torch.distributed as dist
 
 from processing.audio_loader import loadWAV, AugmentWAV
 from utils import round_down, worker_init_fn
-import torch.distributed as dist
 from utils import read_config
 from pathlib import Path
+from tqdm.auto import tqdm
 
 
 def round_down(num, divisor):
@@ -55,13 +57,16 @@ class TrainLoader(Dataset):
             else:
                 self.augment_engine = None
                 self.augment = False
-        print("Augment available: ", self.augment)
-
+                
         # Read Training Files...
-        with open(dataset_file_name) as dataset_file:
-            lines = dataset_file.readlines()
-
-        dictkeys = list(set([x.split()[0] for x in lines]))
+        lines = []
+        with open(dataset_file_name, 'r', newline='') as rf:
+            spamreader = csv.reader(rf, delimiter=',')
+            next(spamreader, None)
+            for row in spamreader:
+                lines.append(row[:2]) # spkid, path, duration, audio_format take only 'spkid path'
+                
+        dictkeys = list(set([x[0] for x in lines]))
         dictkeys.sort()
         dictkeys = {key: ii for ii, key in enumerate(dictkeys)}
 
@@ -69,9 +74,7 @@ class TrainLoader(Dataset):
         self.data_list = []
         self.data_label = []
 
-        for lidx, line in enumerate(lines):
-            data = line.strip().split()
-
+        for lidx, data in enumerate(lines):
             speaker_label = dictkeys[data[0]]
             filename = data[1]
 

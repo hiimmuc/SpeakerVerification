@@ -269,7 +269,7 @@ def train(gpu, ngpus_per_node, args):
                     writer.close()
                 sys.exit(1)
 
-        if (time.time() - timer) // 60 >= args.ckpt_interval_minutes:
+        if ((time.time() - timer) // 60) % args.ckpt_interval_minutes == 0:
             # save every N mins and keep only top 3
             current_time = 'Day_hour_min'
             ckpt_list = glob.glob(model_save_path, '/ckpt_*')
@@ -278,6 +278,7 @@ def train(gpu, ngpus_per_node, args):
                 subprocess.call(f'rm -f {ckpt_list[-1]}', shell=True)
             speaker_model.saveParameters(
                 model_save_path + f"/ckpt_{current_time}.pt")
+            
         if args.gpu == 0:
             writer.add_scalar('Loss/train', loss, it)
             writer.add_scalar('Accuracy/train', train_acc, it)

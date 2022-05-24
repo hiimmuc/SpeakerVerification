@@ -5,6 +5,7 @@ import torch.distributed as dist
 import torch.multiprocessing as mp
 from export import *
 from inference import inference
+from dataprep import DataGenerator
 from trainer import train
 from utils import read_config
 import subprocess
@@ -126,16 +127,19 @@ if __name__ == '__main__':
     
     # parse metadata to save files
     metadata_path = os.path.join(args.save_folder, 'metadata')
-    if os.path.exists(Path(args.data_folder, 'metadata')):
-        subprocess.call(
-            f"cp -R {Path(args.data_folder, 'metadata')} {metadata_path}", shell=True)
+    if os.path.exists(os.path.join(args.data_folder, 'metadata')) and os.path.exists(metadata_path):
+        print("Metadata files are exist, skip preparing...")
     else:
-        subprocess.call(
-            f"python dataprep.py --generate --config {sys_args.config}", shell=True)
+        print("Metadata files are not exist, start preparing...")
+        os.makedirs(metadata_path, exist_ok=True)
+        data_generator = DataGenerator(args)        
+        valid_spks, invalid_spks = data_generator.generate_metadata()
+        args.nClasses = len(valid_spks)
     
     # Run
     n_gpus = torch.cuda.device_count()
-
+    
+    print('Seed:', args.seed)
     print('Python Version:', sys.version)
     print('PyTorch Version:', torch.__version__)
     print('Number of GPUs:', torch.cuda.device_count())
