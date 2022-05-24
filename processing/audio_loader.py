@@ -54,7 +54,7 @@ def random_augment_audio(audio_seg, setting):
 def loadWAV(audio_source, audio_spec,
             evalmode=True, num_eval=10,
             augment=False, augment_options=None, target_db=None,
-            read_mode='sf', random_chunk=True, ** kwargs):
+            read_mode='sf', random_chunk=True, load_all=False, ** kwargs):
     '''Load audio form .wav file and return as the np array
 
     Args:
@@ -108,7 +108,7 @@ def loadWAV(audio_source, audio_spec,
     n_overlap_frames = n_win_frames - n_hop_frames
     max_frames = round((max_audio - n_overlap_frames) / n_hop_frames)
 
-    if max_frames > 0:
+    if max_frames > 0 and not load_all:
         # max_audio = int(max_frames * n_hop_frames + n_overlap_frames)
 
         if audiosize <= max_audio:
@@ -137,7 +137,8 @@ def loadWAV(audio_source, audio_spec,
 
         return feat
     else:
-        return audio
+        # return whole audio
+        return np.expand_dims(audio, 0)
 
 # Environment corruption
 
@@ -152,10 +153,10 @@ class AugmentWAV(object):
         self.rirs_path = augment_options['augment_paths']['rirs']
 
         self.audio_spec = audio_spec
-        self.sr = audio_spec['sample_rate']
-        self.n_hop_frames = audio_spec['hop_len'] * self.sr
-        self.n_win_frames = audio_spec['win_len'] * self.sr
-        self.max_audio = audio_spec['sentence_len'] * self.sr
+        self.sr = int(audio_spec['sample_rate'])
+        self.n_hop_frames = int(audio_spec['hop_len'] * self.sr)
+        self.n_win_frames = int(audio_spec['win_len'] * self.sr)
+        self.max_audio = int(audio_spec['sentence_len'] * self.sr)
 
         n_overlap_frames = self.n_win_frames - self.n_hop_frames
         assert n_overlap_frames > 0, 'invalid audio spec'
@@ -172,7 +173,7 @@ class AugmentWAV(object):
         print("Augment set information...")
         # dataset/augment_data/musan_split/ + noise/free-sound/noise-free-sound-0000.wav
         musan_noise_files = glob.glob(
-            os.path.join(self.musan_path, '*/*/*.wav'))
+            os.path.join(self.musan_path, '*/*/*/*.wav'))
 
         print(f"Using {len(musan_noise_files)} files of MUSAN noise")
 
@@ -223,8 +224,7 @@ class AugmentWAV(object):
     def reverberate(self, audio):
         rir_file = random.choice(self.reverberation_files)
         rir = loadWAV(rir_file, self.audio_spec, evalmode=False,
-                      sample_rate=self.sr, target_db=self.target_db)
-        rir = np.expand_dims(rir.astype(np.float), 0)
+                      sample_rate=self.sr, target_db=self.target_db, load_all=True).astype(np.float)
         rir = rir / np.sqrt(np.sum(rir ** 2))
         aug_audio = signal.convolve(audio, rir, mode='full')[
             :, :self.max_audio]
