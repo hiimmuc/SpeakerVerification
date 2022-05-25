@@ -20,6 +20,7 @@ def main(args):
             else:
                 train(0, None, args)
         except:
+            args.distributed = False
             train(0, None, args)
             
     elif args.do_infer:
@@ -134,12 +135,10 @@ if __name__ == '__main__':
         os.makedirs(metadata_path, exist_ok=True)
         data_generator = DataGenerator(args)        
         valid_spks, invalid_spks = data_generator.generate_metadata()
-        args.nClasses = len(valid_spks)
-    
+           
     # Run
     n_gpus = torch.cuda.device_count()
     
-    print('Seed:', args.seed)
     print('Python Version:', sys.version)
     print('PyTorch Version:', torch.__version__)
     print('Number of GPUs:', torch.cuda.device_count())
