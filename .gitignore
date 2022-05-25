@@ -6,7 +6,8 @@ dataset/
 __pycache__/
 *.py[cod]
 *$py.class
-
+*/__pycache__/
+*.ipynb_checkpoints/
 # C extensions
 *.so
 

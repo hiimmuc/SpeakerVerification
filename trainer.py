@@ -70,40 +70,43 @@ def train(gpu, ngpus_per_node, args):
 
     # Load models
     s = SpeakerEncoder(**vars(args))
-    # setup multi gpus
+    # init parallelism create net-> load weight -> add to parallelism
+
+    # NOTE: Data parallelism for multi-gpu in BETA
+    try:
+        if torch.cuda.device_count() > 1 and args.data_parallel:
+            print("Let's use", torch.cuda.device_count(), "GPUs!")
+            # dim = 0 [30, xxx] -> [10, ...], [10, ...], [10, ...] on 3 GPUs
+            s = nn.DataParallel(
+                s, device_ids=[i for i in range(torch.cuda.device_count())])
+        s = s.to(args.device)
+    except Exception as e:
+        s = WrappedModel(s).to(args.device)
+
+    # NOTE: setup distributed data parallelism training
     if args.distributed:
-        os.environ['MASTER_ADDR'] = 'localhost'
-        os.environ['MASTER_PORT'] = args.port
+        try:
+            os.environ['MASTER_ADDR'] = 'localhost'
+            os.environ['MASTER_PORT'] = args.port
 
-        dist.init_process_group(
-            backend=args.distributed_backend,
-            world_size=ngpus_per_node, rank=args.gpu)
+            dist.init_process_group(
+                backend=args.distributed_backend,
+                world_size=ngpus_per_node, rank=args.gpu)
 
-        torch.cuda.set_device(args.gpu)
-        s.cuda(args.gpu)
+            torch.cuda.set_device(args.gpu)
+            s.cuda(args.gpu)
 
-        s = torch.nn.parallel.DistributedDataParallel(
-            s, device_ids=[args.gpu], find_unused_parameters=True)
+            s = torch.nn.parallel.DistributedDataParallel(
+                s, device_ids=[args.gpu], find_unused_parameters=True)
 
-        print('Loaded the model on GPU {:d}'.format(args.gpu))
+            print('Loaded the model on GPU {:d}'.format(args.gpu))
+        except:
+            dist.destroy_process_group()
 
     else:
         s = WrappedModel(s).cuda(args.gpu)
 
     speaker_model = ModelHandling(s, **dict(vars(args), T_max=max_iter_size))
-    # init parallelism create net-> load weight -> add to parallelism
-
-    # NOTE: Data parallelism for multi-gpu in BETA
-    # try:
-    #     if torch.cuda.device_count() > 1:
-    #         print("Let's use", torch.cuda.device_count(), "GPUs!")
-    #         # dim = 0 [30, xxx] -> [10, ...], [10, ...], [10, ...] on 3 GPUs
-    #         s.__S__ = nn.DataParallel(
-    #             s.__S__, device_ids=[i for i in range(torch.cuda.device_count())])
-    #     s.__S__ = s.__S__.to(args.device)
-    # except Exception as e:
-    #     print(e)
-    #     s.__S__ = s.__S__.to(args.device)
 
     print(f"Using pretrained: {args.pretrained['use']}")
 

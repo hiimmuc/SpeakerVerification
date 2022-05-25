@@ -64,6 +64,10 @@ if __name__ == '__main__':
                         type=str,
                         default="cuda",
                         help='cuda or cpu')
+    parser.add_argument('--data_parallel',
+                        action='store_true',
+                        default=False,
+                        help='use data parallel')
     parser.add_argument('--distributed', 
                         action='store_true', 
                         default=False, 
