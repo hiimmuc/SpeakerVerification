@@ -52,8 +52,8 @@ def train(gpu, ngpus_per_node, args):
         args.output_folder, f"{args.model['name']}/{args.criterion['name']}/model")
 
     result_save_path = os.path.join(
-        args.output_folder, f"{args.model['name']}/{args.criterion['name']}/result")    
-    
+        args.output_folder, f"{args.model['name']}/{args.criterion['name']}/result")
+
     # TensorBoard
     if args.gpu == 0:
         writer = SummaryWriter(log_dir=f"{result_save_path}/runs")
@@ -278,7 +278,7 @@ def train(gpu, ngpus_per_node, args):
                 subprocess.call(f'rm -f {ckpt_list[-1]}', shell=True)
             speaker_model.saveParameters(
                 model_save_path + f"/ckpt_{current_time}.pt")
-            
+
         if args.gpu == 0:
             writer.add_scalar('Loss/train', loss, it)
             writer.add_scalar('Accuracy/train', train_acc, it)
