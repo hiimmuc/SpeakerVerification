@@ -31,10 +31,10 @@ def inference(args):
         net, **dict(vars(args), T_max=max_iter_size))
 
     model_save_path = os.path.join(
-        args.output_folder, f"{args.model['name']}/{args.criterion['name']}/model")
+        args.save_folder, f"{args.model['name']}/{args.criterion['name']}/model")
 
     result_save_path = os.path.join(
-        args.output_folder, f"{args.model['name']}/{args.criterion['name']}/result")
+        args.save_folder, f"{args.model['name']}/{args.criterion['name']}/result")
 
     ##
     settings_file = open(result_save_path + '/settings.txt', 'a+')
@@ -143,7 +143,9 @@ def inference(args):
 
         # write to file
         write_file = Path(result_save_path, 'evaluation_results.txt')
-
+        fa_pairs = []
+        fr_pairs = []
+        
         with open(write_file, 'w', newline='') as wf:
             spamwriter = csv.writer(wf, delimiter=',')
             spamwriter.writerow(
@@ -154,6 +156,12 @@ def inference(args):
                 com, ref = pair.strip().split(' ')
                 spamwriter.writerow([com, ref, label, pred, score])
                 preds.append(pred)
+                if int(label) == 1 and int(label) != pred:
+                    # False rejected
+                    fr_pairs.append(f"{com},{ref},{score}\n")
+                if int(label) == 0 and int(label) != pred:
+                    # False accepted
+                    fa_pairs.append(f"{com},{ref},{score}\n")                
 
             # print out metrics results
             beta_values = [0.5, 2]
@@ -164,6 +172,10 @@ def inference(args):
                   f"\n0's: {prec_recall[1][0]}\n1's: {prec_recall[1][1]}")
             for b in beta_values:
                 print(f"F-{b}:", prec_recall[2][b])
+        with open(Path(result_save_path, 'false_rejected_pairs.txt'), 'w') as wf:
+            wf.writelines(fr_pairs)
+        with open(Path(result_save_path, 'false_accepted_pairs.txt'), 'w') as wf:
+            wf.writelines(fa_pairs)
 
         # decide wether keep the current state
         if copy_name:
