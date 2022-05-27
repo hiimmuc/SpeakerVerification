@@ -3,7 +3,7 @@ import os
 import random
 
 import numpy as np
-
+import torchaudio
 import soundfile as sf
 from pydub import AudioSegment
 
@@ -54,7 +54,7 @@ def random_augment_audio(audio_seg, setting):
 def loadWAV(audio_source, audio_spec,
             evalmode=True, num_eval=10,
             augment=False, augment_options=None, target_db=None,
-            read_mode='sf', random_chunk=True, load_all=False, ** kwargs):
+            read_mode='pydub', random_chunk=True, load_all=False, ** kwargs):
     '''Load audio form .wav file and return as the np array
 
     Args:
@@ -74,20 +74,26 @@ def loadWAV(audio_source, audio_spec,
         audio_source = str(Path(audio_source))  # to compatible with most os
         if read_mode == 'sf':
             audio, sr = sf.read(audio_source)
+        elif read_mode == 'torchaudio':
+            audio, sr = torchaudio.load(audio_source)
+            audio = audio.numpy()
         else:
+            # read audio using Audio Segments
             audio_seg = AudioSegment.from_file(audio_source)
             sr = int(audio_seg.frame_rate)
 
             assert set_sample_rate == sr, f"Sample rate is not same as desired value {set_sample_rate} and {sr}"
-
+            
+            # normalize rms value of DB to target_db if specified
+            if target_db is not None:
+                audio_seg = gain_target_amplitude(audio_seg, target_db)
+            
+            # perform time donmain augmentation
             if augment and ('time_domain' in augment_options['augment_chain']):
                 audio_seg = random_augment_audio(
                     audio_seg, augment_options['augment_time_domain'])
 
-            if target_db is not None:
-                audio_seg = gain_target_amplitude(audio_seg, target_db)
-
-            # convert to numpy with soundfile mormalize format
+            # convert to numpy with soundfile normalize format
             audio = segment_to_np(audio_seg, normalize=True)
 
     elif isinstance(audio_source, np.ndarray):
@@ -98,19 +104,17 @@ def loadWAV(audio_source, audio_spec,
     audiosize = audio.shape[0]
 
     # Maximum audio length counted in frames
-    # hoplength is 160, winlength is 400 -> total length  = winlength- hop_length + max_frames * hop_length
-    # get the winlength 25ms, hop 10ms
+    # winlength 25ms, and hop 10ms with sr = 8000 -> hoplen = 80 winlen = 200 
+    # total length  = (winlength- hop_length) + max_frames * hop_length
 
     n_hop_frames = int(audio_spec['hop_len'] * set_sample_rate)
     n_win_frames = int(audio_spec['win_len'] * set_sample_rate)
-    max_audio = int(audio_spec['sentence_len'] * set_sample_rate)
-
+    max_audio = int(audio_spec['sentence_len'] * set_sample_rate) # max_audio = int(max_frames * n_hop_frames + n_overlap_frames)
+    
     n_overlap_frames = n_win_frames - n_hop_frames
     max_frames = round((max_audio - n_overlap_frames) / n_hop_frames)
 
     if max_frames > 0 and not load_all:
-        # max_audio = int(max_frames * n_hop_frames + n_overlap_frames)
-
         if audiosize <= max_audio:
             shortage = max_audio - audiosize + 1
             audio = np.pad(audio, (0, shortage), 'wrap')
