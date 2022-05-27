@@ -264,6 +264,9 @@ class DataGenerator():
             raise "Invalid number of speakers"
 
         print('Generate dataset metadata files, total:', len(classpaths))
+        print("Minimum utterances per speaker required:", lower_num)
+        print("Maximum utterances per speaker required:", upper_num)
+        
         train_filepaths_list = []
         val_filepaths_list = []
 
@@ -271,6 +274,7 @@ class DataGenerator():
             filepaths = list(classpath.glob('*.wav'))
 
             # filtering dataset
+            
             # check duration, volumn
             # blist = read_blacklist(str(Path(classpath).name),
             #                        duration_limit=duration_limit,
@@ -505,7 +509,7 @@ if __name__ == '__main__':
     if args.convert:
         data_generator.convert()
     if args.generate:
-        valid_spks, invalid_spks = data_generator.generate_metadata(
+        data_generator.generate_metadata(
             num_spks=args.num_spks, lower_num=args.lower_num, upper_num=args.upper_num)
     if args.restore:
         restore_dataset(args.data_folder)

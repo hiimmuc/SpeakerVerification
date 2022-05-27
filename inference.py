@@ -7,18 +7,16 @@ import sys
 import time
 from math import fabs
 from pathlib import Path
-from turtle import up
 
 import numpy as np
 import torch
 import torch.nn.functional as F
-from SpeakerVerification.SpeakerVerification.utils import accuracy
 from model import SpeakerEncoder, WrappedModel, ModelHandling
 
 from sklearn.metrics import (accuracy_score, classification_report,
                              confusion_matrix, fbeta_score, roc_curve)
 from tqdm import tqdm
-from utils import ComputeErrorRates, ComputeMinDcf, tuneThresholdfromScore, update_log_file
+from utils import ComputeErrorRates, ComputeMinDcf, tuneThresholdfromScore
 
 # ---------------------------------//
 # Evaluation code - must run on single GPU
@@ -36,10 +34,14 @@ def inference(args):
     result_save_path = os.path.join(
         args.save_folder, f"{args.model['name']}/{args.criterion['name']}/result")
 
-    ##
+    # Write args to score_file
     settings_file = open(result_save_path + '/settings.txt', 'a+')
+    score_file = open(result_save_path + "/Inference_log.txt", "a+")
+    test_log_file = open(result_save_path + "/Testing_log.txt", "a+")
     # summary settings
     settings_file.write(
+        f'\n[INFER]------------------{time.strftime("%Y-%m-%d %H:%M:%S")}------------------\n')
+    score_file.write(
         f'\n[INFER]------------------{time.strftime("%Y-%m-%d %H:%M:%S")}------------------\n')
     # write the settings to settings file
     for items in vars(args):
@@ -82,6 +84,7 @@ def inference(args):
 
     # Evaluation from list
     if args.eval is True:
+
         sc, lab, trials = model.evaluateFromList(
             args.eval_list,
             dataloader_options=args.dataloader_options,
@@ -95,6 +98,7 @@ def inference(args):
         # results['gmean'] = [idxG, gmean[idxG], thresholds[idxG]]
         # results['roc'] = [tunedThreshold, eer, metrics.auc(fpr, tpr), optimal_threshold]
         # results['prec_recall'] = [precision, recall, fscore[ixPR], thresholds_[ixPR]]
+
         result = tuneThresholdfromScore(sc, lab, target_fa)
 
         ####
@@ -119,27 +123,13 @@ def inference(args):
               f">> Gmean result: \n>>> EER: {(1 - result['gmean'][1]) * 100}% at threshold {result['gmean'][2]}\n>>> ACC: {result['gmean'][1] * 100}%\n",
               f">> F-score {result['prec_recall'][2]}% at threshold {result['prec_recall'][-1]}\n")
 
-        time.strftime("%Y-%m-%d %H:%M:%S")
-
-        inference_log_file = str(Path(result_save_path) / "Inference_log.json")
-        log = {
-            f"{time.strftime('% Y-%m-%d % H: % M: % S')}": {
-                "Test filename": args.eval_list,
-                "Model path": args.initial_model_infer,
-                "ROC": {
-                    "EER": result['roc'][1],
-                    "Threshold": result['roc'][-1],
-                    "AUC": result['roc'][2],
-                },
-                "t-DCF": mindcf,
-                "G-mean": {
-                    "EER": (1 - result['gmean'][1]) * 100,
-                    "Threshold": result['gmean'][2],
-                    "Accuracy": result['gmean'][1] * 100,
-                }
-            }
-        }
-        update_log_file(inference_log_file, log)
+        score_file.writelines(
+            [f"[Evaluation] result on: [{args.eval_list}] with [{args.initial_model_infer}]\n",
+             f"Best sum rate {best_sum_rate} at {best_tfa}\n",
+             f" EER {result['roc'][1]}% at threshold {result['roc'][-1]}\nAUC {result['roc'][2]}\n",
+             f"Gmean result:\n",
+             f"EER: {(1 - result['gmean'][1]) * 100}% at threshold {result['gmean'][2]}\n>>> ACC: {result['gmean'][1] * 100}%\n=================>\n"])
+        score_file.close()
 
         # write to file
         write_file = Path(result_save_path, 'evaluation_results.txt')
@@ -195,29 +185,16 @@ def inference(args):
                            print_interval=1,
                            eval_frames=args.eval_frames,
                            scoring_mode=scoring_mode,
-                           output_file=args.log_test_files['com'], num_eval=num_eval)
+                           output_file=args.com, num_eval=num_eval)
 
-        roc, prec_recall = evaluate_result(
-            path=args.log_test_files['com'], ref=args.log_test_files['ref'])
-        test_log_file = str(Path(result_save_path) / "Testing_log.json")
-        log = {
-            f"{time.strftime('%Y-%m-%d %H:%M:%S')}": {
-                "Test filename": args.test_list,
-                "Model path": args.initial_model_infer,
-                "Threshold": threshold,
-                "ROC": roc,
-                "Report": prec_recall,
-                "Saved files": [args.log_test_files['com'], args.log_test_files['ref']]
-            }
-        }
-        update_log_file(test_log_file, log)
-        # test_log_file.writelines([f">{time.strftime('%Y-%m-%d %H:%M:%S')}<",
-        #                           f"Test result on: [{args.test_list}] with [{}]\n",
-        #                           f"Threshold: {threshold}\n",
-        #                           f"ROC: {roc}\n",
-        #                           f"Report: \n{prec_recall}\n",
-        #                           f"Save to {args.com} and {args.ref} \n========================================\n"])
-        # test_log_file.close()
+        roc, prec_recall = evaluate_result(path=args.log_test_files['com'], ref=args.log_test_files['ref'])
+        test_log_file.writelines([f">{time.strftime('%Y-%m-%d %H:%M:%S')}<",
+                                  f"Test result on: [{args.test_list}] with [{args.initial_model_infer}]\n",
+                                  f"Threshold: {threshold}\n",
+                                  f"ROC: {roc}\n",
+                                  f"Report: \n{prec_recall}\n",
+                                  f"Save to {args.log_test_files['com']} and {args.log_test_files['ref']} \n========================================\n"])
+        test_log_file.close()
         sys.exit(1)
 
     # Prepare embeddings for cohorts/verification

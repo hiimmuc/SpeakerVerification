@@ -2,25 +2,22 @@ import os
 import csv
 import importlib
 import random
-import sys
-import time
-from pathlib import Path
-import time
-import os
 import itertools
-import shutil
-import importlib
 import numpy as np
+
+from pathlib import Path
+from tqdm.auto import tqdm
+
 import onnx
 import onnxruntime as onnxrt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.cuda.amp import autocast, GradScaler
 
-from tqdm.auto import tqdm
 from processing.audio_loader import loadWAV
 from utils import (similarity_measure, cprint)
-from torch.cuda.amp import autocast, GradScaler
+
 
 class WrappedModel(nn.Module):
 
@@ -34,37 +31,41 @@ class WrappedModel(nn.Module):
         return self.module(x, label)
 
 
-class SpeakerEncoder(nn.Module):
-    
-    def __init__(self, model, criterion, classifier, optimizer, features , device, include_top=False, ** kwargs) -> None:
+class SpeakerEncoder(nn.Module):    
+    def __init__(self, model, criterion, classifier, optimizer, features , device='cuda', gpu=0, include_top=False, ** kwargs) -> None:
+        """Speaker encoder class
+
+        Args:
+            model (dict): model
+            criterion (dict): loss function definition
+            classifier (dict): _description_
+            optimizer (_type_): _description_
+            features (_type_): _description_
+            device (_type_): _description_
+            include_top (bool, optional): _description_. Defaults to False.
+        """
         super(SpeakerEncoder, self).__init__()
         self.model = model
         self.criterion = criterion
         self.classifier = classifier
         self.optimizer = optimizer
-        self.device = device
+        self.gpu = gpu
+        self.device = torch.device(f'{device}:{self.gpu}')
         self.n_mels = kwargs['n_mels']
         self.augment = kwargs['augment']
         self.augment_chain = kwargs['augment_options']['augment_chain']
+        self.features = features.lower()       
         
-        if features.lower() in ['mfcc', 'melspectrogram']:
+        if self.features in ['mfcc', 'melspectrogram']:
             Features_extractor = importlib.import_module(
                 'models.FeatureExtraction.feature').__getattribute__(f"{features.lower()}")
-            self.compute_features = Features_extractor(**kwargs).to(self.device)
+            self.compute_features = Features_extractor(**kwargs)
         else:
-            Features_extractor = None 
             self.compute_features = None   
-        
-        
+                
         SpeakerNetModel = importlib.import_module(
             'models.' + self.model['name']).__getattribute__('MainModel')
-        self.__S__ = SpeakerNetModel(nOut=self.model['nOut'],
-                                     **kwargs).to(self.device)
-        # # necessaries:
-        # self.aug = kwargs['augment']
-        # self.aug_chain = kwargs['augment_chain']
-        # nOut n_mels
-        
+        self.__S__ = SpeakerNetModel(nOut=self.model['nOut'], **kwargs)      
         
         LossFunction = importlib.import_module(
             'losses.' + self.criterion['name']).__getattribute__(f"{self.criterion['name']}")
@@ -72,7 +73,7 @@ class SpeakerEncoder(nn.Module):
         self.__L__ = LossFunction(nOut=self.model['nOut'], 
                                   margin=self.criterion['margin'], 
                                   scale=self.criterion['scale'],
-                                  **kwargs).to(self.device)
+                                  **kwargs)
         #NOTE: nClasses is defined
         self.test_normalize = self.__L__.test_normalize
         
@@ -84,38 +85,43 @@ class SpeakerEncoder(nn.Module):
             self.fc = nn.Linear(
                 self.classifier['input_size'], self.classifier['out_neurons'])
 
-        ####
-        nb_params = sum([param.view(-1).size()[0]
-                        for param in self.__S__.parameters()])
-        print(f"Initialize encoder model {self.model['name']}: {nb_params:,} params")
-        print("Embedding normalize: ", self.__L__.test_normalize)
+        ####Print information only on main process
+        if self.gpu == 0:
+            nb_params = sum([param.view(-1).size()[0]
+                            for param in self.__S__.parameters()])
+            print("Model information:")
+            print(f"- Initialized model: {self.model['name']} - {nb_params:,} params")
+            print(f"- Using loss function: {self.criterion['name']}")
+            print(f"- Embedding normalized: ", self.__L__.test_normalize)
         
     def forward(self, data, label=None):
-        # data = data.cuda()
-        
+        # data = data.reshape(-1,data.size()[-1]).to(self.device)
+        data = data.to(self.device)
+        # data size: n_speaker x bsize x n_samples
         feat = []
         # forward n utterances per speaker and stack the output
         for inp in data:
-            if self.compute_features is not None:
-                inp = self.compute_features(inp)
-            outp = self.__S__(inp.to(self.device))
-            feat.append(outp)
+            if self.features != 'raw':
+                inp = self.compute_features(inp.to(self.device)) # convert raw audio to mel
+            output = self.__S__.forward(inp.to(self.device))
+            feat.append(output)
 
         feat = torch.stack(feat, dim=1).squeeze()
                 
         ## Beta for the recognition task
         # if self.include_top:
-        #     outp = self.fc(self.__S__.forward(data))
+        #     feat = self.fc(self.__S__.forward(data))
         # else:
-        #     outp = self.__S__.forward(data)
+        #     feat = self.__S__.forward(data)
 
+        ## Calculate loss
         if label == None:
             return feat
         else:
+            feat = feat.reshape(self.nPerSpeaker,-1,feat.size()[-1]).transpose(1,0).squeeze(1)
             nloss, prec1 = self.__L__.forward(feat, label)
             return nloss, prec1
                 
-
 
 class ModelHandling(object):
     def __init__(self, encoder_model, 
@@ -123,13 +129,24 @@ class ModelHandling(object):
                  callbacks='steplr',  
                  device='cuda',
                  gpu=0,  mixedprec=False, **kwargs):
+        """_summary_
+
+        Args:
+            encoder_model (_type_): _description_
+            optimizer (str, optional): _description_. Defaults to 'adam'.
+            callbacks (str, optional): _description_. Defaults to 'steplr'.
+            device (str, optional): _description_. Defaults to 'cuda'.
+            gpu (int, optional): _description_. Defaults to 0.
+            mixedprec (bool, optional): _description_. Defaults to False.
+        """
         
         # take only args
         super(ModelHandling, self).__init__()
         
         self.kwargs = kwargs
-        self.device = torch.device(device)
+        
         self.save_path = self.kwargs['save_folder']
+        self.audio_spec = self.kwargs['audio_spec']
         
         self.T_max = 0 if 'T_max' not in self.kwargs else self.kwargs['T_max']
 
@@ -138,7 +155,8 @@ class ModelHandling(object):
         self.scaler = GradScaler()
 
         self.gpu = gpu
-
+        self.device = torch.device(f"{device}:{gpu}")
+        
         self.mixedprec = mixedprec
         
         Optimizer = importlib.import_module(
@@ -170,7 +188,7 @@ class ModelHandling(object):
     # ## ===== ===== ===== ===== ===== ===== ===== =====
     # ## Train network
     # ## ===== ===== ===== ===== ===== ===== ===== =====
-    def fit(self, loader, epoch=0):
+    def fit(self, loader, epoch=0, verbose=True):
         '''Train
 
         Args:
@@ -185,17 +203,20 @@ class ModelHandling(object):
         stepsize = loader.batch_size
 
         counter = 0
-        index = 0
         loss = 0
         top1 = 0  # EER or accuracy
-                
-        loader_bar = tqdm(loader, desc=f">EPOCH_{epoch}", unit="it", colour="green")
+           
+        if verbose:
+            loader_bar = tqdm(loader, desc=f">EPOCH_{epoch}", unit="it", colour="green")
+        else:
+            loader_bar = loader
         
         for (data, data_label) in loader_bar:
-            data = data.transpose(0, 1).to(self.device)
-            label = torch.LongTensor(data_label).to(self.device)
+            data = data.transpose(0, 1)
             
             self.__model__.zero_grad()
+            
+            label = torch.LongTensor(data_label).to(self.device)
             
             if self.mixedprec:
                 with autocast():
@@ -211,12 +232,12 @@ class ModelHandling(object):
             loss += nloss.detach().cpu()
             top1 += prec1.detach().cpu()
             counter += 1
-            index += stepsize
 
             # update tqdm bar
-            loader_bar.set_postfix(LR=f"{round(float(self.__optimizer__.param_groups[0]['lr']), 8)}", 
-                                   TLoss=f"{round(float(loss / counter), 5)}", 
-                                   TAcc=f"{round(float(top1 / counter), 3)}%")
+            if verbose:
+                loader_bar.set_postfix(LR=f"{round(float(self.__optimizer__.param_groups[0]['lr']), 8)}", 
+                                       TLoss=f"{round(float(loss / counter), 5)}", 
+                                       TAcc=f"{round(float(top1 / counter), 3)}%")
 
             if self.lr_step == 'iteration':
                 self.__scheduler__.step()
@@ -234,14 +255,18 @@ class ModelHandling(object):
                 self.__scheduler__['rop'](loss / counter)
             else:
                 if epoch == 51:
-                    cprint("\n[INFO] # Epochs > 50, switch to steplr callback\n========>\n", 'r')
+                    if verbose:
+                        cprint("\n[INFO] # Epochs > 50, switch to steplr callback\n========>\n", 'r')
                 self.__scheduler__['steplr'].step()
 
         loss_result = loss / (counter)
         precision = top1 / (counter)
 
         return loss_result, precision
-
+    
+    ## ===== ===== ===== ===== ===== ===== ===== =====
+    ## Evaluate model with eval files
+    ## ===== ===== ===== ===== ===== ===== ===== =====
     def evaluateFromList(self,
                          listfilename,
                          distributed,
@@ -249,6 +274,19 @@ class ModelHandling(object):
                          cohorts_path='checkpoint/dump_cohorts.npy',
                          num_eval=10,
                          scoring_mode='cosine', **kwargs):
+        """_summary_
+
+        Args:
+            listfilename (_type_): _description_
+            distributed (_type_): _description_
+            dataloader_options (_type_): _description_
+            cohorts_path (str, optional): _description_. Defaults to 'checkpoint/dump_cohorts.npy'.
+            num_eval (int, optional): _description_. Defaults to 10.
+            scoring_mode (str, optional): _description_. Defaults to 'cosine'.
+
+        Returns:
+            _type_: _description_
+        """
         
         if distributed:
             rank = torch.distributed.get_rank()
@@ -374,15 +412,29 @@ class ModelHandling(object):
                 all_trials.append(data[1] + " " + data[2])             
             
         return all_scores, all_labels, all_trials
-
+    
+    ## ===== ===== ===== ===== ===== ===== ===== =====
+    ## Testing files from list of testing pairs
+    ## ===== ===== ===== ===== ===== ===== ===== =====
     def testFromList(self,
                      root,
                      test_list='evaluation_test.txt',
-                     thre_score=0.5,
+                     thresh_score=0.5,
                      cohorts_path=None,
                      num_eval=10,
                      scoring_mode='norm',
                      output_file=None):
+        """_summary_
+
+        Args:
+            root (_type_): _description_
+            test_list (str, optional): _description_. Defaults to 'evaluation_test.txt'.
+            thresh_score (float, optional): _description_. Defaults to 0.5.
+            cohorts_path (_type_, optional): _description_. Defaults to None.
+            num_eval (int, optional): _description_. Defaults to 10.
+            scoring_mode (str, optional): _description_. Defaults to 'norm'.
+            output_file (_type_, optional): _description_. Defaults to None.
+        """
         self.__model__.eval()
 
         lines = []
@@ -403,7 +455,7 @@ class ModelHandling(object):
         
         # Read all lines from testfile (read_file)
         print(">>>>TESTING...")
-        print(f">>> Threshold: {thre_score}")
+        print(f">>> Threshold: {thresh_score}")
         with open(read_file, newline='') as rf:
             spamreader = csv.reader(rf, delimiter=',')
             next(spamreader, None)
@@ -455,10 +507,8 @@ class ModelHandling(object):
                     elif scoring_mode == 'pnorm' :
                         score = similarity_measure('pnorm', ref_feat, com_feat, p = 2)
 
-                pred = '1' if score >= thre_score else '0'
+                pred = '1' if score >= thresh_score else '0'
                 spamwriter.writerow([data[0], data[1], pred, score])
-
-        
    
     ## ===== ===== ===== ===== ===== ===== ===== =====
     ## preparing the cohort or embeddings of multiple utterances
@@ -468,12 +518,16 @@ class ModelHandling(object):
                 prepare_type='cohorts',
                 num_eval=10,
                 eval_frames=100,
-                source=None, **kwargs):                    
- 
-        """
-        Prepared 1 of the 2:
+                source=None, **kwargs):     
+                       
+        """ Prepared 1 of the 2:
         1. Mean L2-normalized embeddings for known speakers.
         2. Cohorts for score normalization.
+        Raises:
+            NotImplementedError: _description_
+
+        Returns:
+            _type_: _description_
         """
         
         self.__model__.eval()
@@ -542,7 +596,7 @@ class ModelHandling(object):
                     else:
                         embeds = torch.cat((embeds, mean_embed.unsqueeze(-1)), -1)
 
-                print(embeds.shape)
+                # print(embeds.shape)
                 # embeds = rearrange(embeds, 'n_class n_sam feat -> n_sam feat n_class')
                 if save_path:
                     torch.save(embeds, Path(save_path, 'embeds.pt'))
@@ -580,8 +634,17 @@ class ModelHandling(object):
                         eval_frames=0,
                         num_eval=10,
                         normalize=False, sr=None):
-        """
-        Get embedding from utterance
+        """_summary_
+
+        Args:
+            source (_type_): _description_
+            eval_frames (int, optional): _description_. Defaults to 0.
+            num_eval (int, optional): _description_. Defaults to 10.
+            normalize (bool, optional): _description_. Defaults to False.
+            sr (_type_, optional): _description_. Defaults to None.
+
+        Returns:
+            _type_: _description_
         """
         audio = loadWAV(source,
                         eval_frames,
@@ -606,32 +669,31 @@ class ModelHandling(object):
         torch.save(self.__model__.module.state_dict(), path)
 
     def loadParameters(self, path, show_error=True):
-        self_state = self.__model__.module.state_dict()
-        
-        if self.device == torch.device('cpu'):
-            loaded_state = torch.load(path, map_location=torch.device('cpu'))
-        else:
-            print(f"Load model in {torch.cuda.device_count()} GPU(s)")
-            loaded_state = torch.load(path, map_location="cuda:%d" % self.gpu)
+        if os.path.exists(path):
+            self_state = self.__model__.module.state_dict()
             
-        for name, param in loaded_state.items():
-            origname = name
-            
-            if name not in self_state:
-                name = name.replace("module.", "")
+            loaded_state = torch.load(path, map_location=self.device)
+
+            for name, param in loaded_state.items():
+                origname = name
 
                 if name not in self_state:
+                    name = name.replace("module.", "")
+
+                    if name not in self_state:
+                        if show_error:
+                            print("{} is not in the model.".format(origname))
+                        continue
+
+                if self_state[name].size() != loaded_state[origname].size():
                     if show_error:
-                        print("{} is not in the model.".format(origname))
+                        print("Wrong parameter length: {}, model: {}, loaded: {}".format(
+                            origname, self_state[name].size(), loaded_state[origname].size()))
                     continue
 
-            if self_state[name].size() != loaded_state[origname].size():
-                if show_error:
-                    print("Wrong parameter length: {}, model: {}, loaded: {}".format(
-                        origname, self_state[name].size(), loaded_state[origname].size()))
-                continue
-
-            self_state[name].copy_(param)
+                self_state[name].copy_(param)
+        else:
+            raise "Model's path is not exists"
 
     def export_onnx(self, state_path, check=True):
         save_root = self.save_path + f"/{self.model_name}/model"
@@ -641,18 +703,19 @@ class ModelHandling(object):
         output_names = ["output"]
         # NOTE: because using torch.audio -> cant export onnx
         # nume_val, samplerate * (1 + win_len - hoplen)
-        dummy_input = torch.randn(10, 8120, device="cuda")
+        n_s = self.kwargs['num_eval']
+        dim = self.audio_spec['sample_rate'] * self.audio_spec['sentence_len']
+        dummy_input = torch.randn(n_s, dim, device="cuda")
 
         self.loadParameters(state_path)
         self.__model__.eval()
 
-        torch.onnx.export(self.__S__,
+        torch.onnx.export(self.__model__,
                           dummy_input,
                           save_path,
                           verbose=False,
                           input_names=input_names,
                           output_names=output_names,
-                          
                           export_params=True,
                           opset_version=11)
 

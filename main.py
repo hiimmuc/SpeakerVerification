@@ -1,37 +1,31 @@
 import argparse
-from importlib_metadata import metadata
+import subprocess
 
-import torch.distributed as dist
-import torch.multiprocessing as mp
 from export import *
 from inference import inference
 from dataprep import DataGenerator
 from trainer import train
 from utils import read_config
-import subprocess
+
 
 def main(args):
-    if args.do_train:
-        # TODO: train model
-        try:
-            if args.distributed:
-                npugs = torch.cuda.device_count()
-                mp.spawn(train, nprocs=npugs, args=(npugs, args))
-            else:
-                train(0, None, args)
-        except:
-            args.distributed = False
-            train(0, None, args)
+    try:
+        if args.do_train:
+            # TODO: train model
+            train(args)
             
-    elif args.do_infer:
-        # TODO: evaluate model
-        inference(args)
-        
-    elif args.do_export:
-        export_model(args, check=True)
-    else:
-        raise 'Wrong main mode, available: do_train, do_infer, do_export'
-    pass
+        elif args.do_infer:
+            # TODO: evaluate model
+            inference(args)
+
+        elif args.do_export:
+            export_model(args, check=True)
+            
+        else:
+            raise 'Wrong main mode, available: do_train, do_infer, do_export'
+    except Exception as e:
+        print(e)
+        sys.exit(1)
 
 
 #--------------------------------------------------------------------------------------#
@@ -44,7 +38,7 @@ if __name__ == '__main__':
     parser.add_argument('--do_train', action='store_true', default=False)
     parser.add_argument('--do_infer', action='store_true', default=False)
     parser.add_argument('--do_export', action='store_true', default=False)
-    
+
     # Infer mode
     parser.add_argument('--eval',
                         dest='eval',
@@ -58,7 +52,7 @@ if __name__ == '__main__':
                         dest='predict',
                         action='store_true',
                         help='Predict')
-    
+
     # Device settings
     parser.add_argument('--device',
                         type=str,
@@ -68,42 +62,41 @@ if __name__ == '__main__':
                         action='store_true',
                         default=False,
                         help='use data parallel')
-    parser.add_argument('--distributed', 
-                        action='store_true', 
-                        default=False, 
+    parser.add_argument('--distributed',
+                        action='store_true',
+                        default=False,
                         help='Decide whether to use multi gpus')
     parser.add_argument('--distributed_backend',
                         type=str,
                         default="nccl",
                         help='nccl or gloo or mpi')
-    
-    ## Distributed and mixed precision training
-    parser.add_argument('--port',           
-                        type=str,   
-                        default="8888", 
+
+    # Distributed and mixed precision training
+    parser.add_argument('--port',
+                        type=str,
+                        default="8888",
                         help='Port for distributed training, input as text')
-    parser.add_argument('--mixedprec',      
-                        dest='mixedprec',   
-                        action='store_true', 
+    parser.add_argument('--mixedprec',
+                        dest='mixedprec',
+                        action='store_true',
                         default=False,
                         help='Enable mixed precision training')
-
 
     parser.add_argument('--augment',
                         action='store_true',
                         default=False,
                         help='Augment input')
-    
+
     parser.add_argument('--early_stopping',
                         action='store_true',
                         default=False,
                         help='Early stopping')
-    
+
     parser.add_argument('--seed',
                         type=int,
                         default=1000,
                         help='seed')
-    
+
    #--------------------------------------------------------------------------------------#
 
     sys_args = parser.parse_args()
@@ -111,25 +104,26 @@ if __name__ == '__main__':
     if sys_args.config is not None:
         args = read_config(sys_args.config, sys_args)
         args = argparse.Namespace(**args)
-    
+
     # Initialise directories
     model_save_path = os.path.join(
         args.save_folder, Path(f"{args.model['name']}/{args.criterion['name']}/model"))
     os.makedirs(model_save_path, exist_ok=True)
-    
+
     result_save_path = os.path.join(
         args.save_folder, Path(f"{args.model['name']}/{args.criterion['name']}/result"))
     os.makedirs(result_save_path, exist_ok=True)
-    
+
     config_clone_path = os.path.join(
         args.save_folder, Path(f"{args.model['name']}/{args.criterion['name']}/config"))
-    
+
     if not os.path.exists(config_clone_path):
         os.makedirs(config_clone_path, exist_ok=True)
         if args.config is not None:
             config_dir = '/'.join(str(args.config).split('/')[:-1])
-            subprocess.call(f"cp -R {config_dir}/*.yaml {config_clone_path}", shell=True)
-    
+            subprocess.call(
+                f"cp -R {config_dir}/*.yaml {config_clone_path}", shell=True)
+
     # parse metadata to save files
     metadata_path = os.path.join(args.save_folder, 'metadata')
     if os.path.exists(os.path.join(args.data_folder, 'metadata')) and os.path.exists(metadata_path):
@@ -137,16 +131,16 @@ if __name__ == '__main__':
     else:
         print("Metadata files are not exist, start preparing...")
         os.makedirs(metadata_path, exist_ok=True)
-        data_generator = DataGenerator(args)        
+        data_generator = DataGenerator(args)
         valid_spks, invalid_spks = data_generator.generate_metadata()
-           
+
     # Run
     n_gpus = torch.cuda.device_count()
-    
+
     print('Python Version:', sys.version)
     print('PyTorch Version:', torch.__version__)
     print('Number of GPUs:', torch.cuda.device_count())
-    
+
     main(args)
-    
+
     #######################################################################################

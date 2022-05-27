@@ -1,4 +1,3 @@
-import json
 from hyperpyyaml import load_hyperpyyaml
 import sys
 import argparse
@@ -8,6 +7,7 @@ from argparse import Namespace
 
 import numpy as np
 
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -15,8 +15,10 @@ import torch.nn.functional as F
 import yaml
 from matplotlib import pyplot as plt
 
+
 from sklearn import metrics
 from sklearn.metrics import precision_recall_curve
+
 
 from operator import itemgetter
 
@@ -51,8 +53,9 @@ class PreEmphasis(torch.nn.Module):
             torch.FloatTensor([-self.coef, 1.]).unsqueeze(0).unsqueeze(0))
 
     def forward(self, input: torch.tensor) -> torch.tensor:
+        
         assert len(input.size(
-        )) == 2, 'The number of dimensions of input tensor must be 2!'
+        )) == 2, f'The number of dimensions of input tensor must be 2, got {input.size()}'
         # reflect padding to match lengths of in/out
         input = input.unsqueeze(1)
         input = F.pad(input, (1, 0), 'reflect')
@@ -121,7 +124,7 @@ def similarity_measure(method='cosine', ref=None, com=None, **kwargs):
         return ZT_norm_similarity(ref, com, **kwargs)
 
 
-def ZT_norm_similarity(ref, com, cohorts, top=-1, params=None):
+def ZT_norm_similarity(ref, com, cohorts, top=-1):
     """
     Adaptive symmetric score normalization using cohorts from eval data
     """
@@ -150,50 +153,12 @@ def ZT_norm_similarity(ref, com, cohorts, top=-1, params=None):
 
 
 def cosine_similarity(ref, com, **kwargs):
-    return np.mean(abs(F.cosine_similarity(ref, com, dim=-1, eps=1e-06)).cpu().numpy())
+    return np.mean(abs(F.cosine_similarity(ref, com, dim=-1, eps=1e-05)).cpu().numpy())
 
 
 def pnorm_similarity(ref, com, p=2, **kwargs):
     pdist = F.pairwise_distance(ref, com, p=p, eps=1e-06, keepdim=True)
     return np.mean(pdist.numpy())
-
-
-def S_norm(enroll, test, cohorts, params):
-    similarity = torch.nn.CosineSimilarity(dim=-1, eps=1e-6)
-    # Getting norm stats for enrol impostors
-    enrol_rep = enroll.repeat(cohorts.shape[0], 1, 1)
-    score_e_c = similarity(enrol_rep, cohorts)
-
-    if "cohort_size" in params:
-        score_e_c = torch.topk(
-            score_e_c, k=params["cohort_size"], dim=0
-        )[0]
-
-    mean_e_c = torch.mean(score_e_c, dim=0)
-    std_e_c = torch.std(score_e_c, dim=0)
-
-    # Getting norm stats for test impostors
-    test_rep = test.repeat(cohorts.shape[0], 1, 1)
-    score_t_c = similarity(test_rep, cohorts)
-
-    if "cohort_size" in params:
-        score_t_c = torch.topk(
-            score_t_c, k=params["cohort_size"], dim=0
-        )[0]
-
-    mean_t_c = torch.mean(score_t_c, dim=0)
-    std_t_c = torch.std(score_t_c, dim=0)
-
-    if "score_norm" in params:
-        if params["score_norm"] == "z-norm":
-            score = (score - mean_e_c) / std_e_c
-        elif params["score_norm"] == "t-norm":
-            score = (score - mean_t_c) / std_t_c
-        elif params["score_norm"] == "s-norm":
-            score_e = (score - mean_e_c) / std_e_c
-            score_t = (score - mean_t_c) / std_t_c
-            score = 0.5 * (score_e + score_t)
-    return score
 
 # main.py utils
 
@@ -233,15 +198,6 @@ def read_log_file(log_file):
         data = rf.readline().strip().replace('\n', '').split(',')
         data = [float(d.split(':')[-1]) for d in data]
     return data
-
-
-def update_log_file(filepath, data):
-    with open(filepath) as log:
-        current_log = json.load(log)
-    current_log.update(dict(data))
-    with open(filepath, 'w') as log:
-        json.dump(current_log, log)
-    pass
 
 
 def round_down(num, divisor):
