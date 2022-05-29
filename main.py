@@ -9,23 +9,20 @@ from utils import read_config
 
 
 def main(args):
-    try:
-        if args.do_train:
-            # TODO: train model
-            train(args)
-            
-        elif args.do_infer:
-            # TODO: evaluate model
-            inference(args)
 
-        elif args.do_export:
-            export_model(args, check=True)
-            
-        else:
-            raise 'Wrong main mode, available: do_train, do_infer, do_export'
-    except Exception as e:
-        print(e)
-        sys.exit(1)
+    if args.do_train:
+        # TODO: train model
+        train(args)
+
+    elif args.do_infer:
+        # TODO: evaluate model
+        inference(args)
+
+    elif args.do_export:
+        export_model(args, check=True)
+
+    else:
+        raise 'Wrong main mode, available: do_train, do_infer, do_export'
 
 
 #--------------------------------------------------------------------------------------#

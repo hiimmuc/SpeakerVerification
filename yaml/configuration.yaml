@@ -1,6 +1,5 @@
 device: "cuda"
-gpu: 0
-seed: 1001
+seed: 1002
 
 # Directories
 output_folder: !ref backup/<seed>
@@ -12,9 +11,8 @@ skip_prep: True
 data_folder: dataset/train_data/zalo_ai
 train_annotation: !ref <save_folder>/metadata/train.txt
 valid_annotation: !ref <save_folder>/metadata/dev.txt
-# train_annotation: dataset/train_data/sample/metadata/train_sample.txt
-# valid_annotation: dataset/train_data/sample/metadata/val_sample.txt
 
+evaluation_file: evaluate_file_path.txt
 verification_file: test_path.txt
 noise_folder: dataset/augment_data
 
@@ -22,8 +20,8 @@ ckpt_interval_minutes: 15 # save checkpoint every N min, -1 to turn off
 save_model_last: True
 
 # Training parameters
-number_of_epochs: 10 # max_epoch
-batch_size: 8 # batch_size
+number_of_epochs: 100 # max_epoch
+batch_size: 16 # batch_size
 lr: 0.001
 base_lr: 0.00000001 # min_lr
 max_lr: !ref <lr> # max lr for callbacks
@@ -33,7 +31,7 @@ random_chunk: True
 
 # Audio parameters
 audio_spec:
-  sample_rate: 16000 # sample_rate
+  sample_rate: 8000 # sample_rate
   channels: 1
   sentence_len: 2.0 # seconds max_frames
   win_len: 0.025
@@ -42,7 +40,7 @@ audio_spec:
 # Feature parameters
 n_mfcc: 80
 n_mels: 80
-features: raw
+features: melspectrogram
 lib: nnaudio
 
 # Number of speakers
@@ -52,9 +50,9 @@ nClasses: 392 #1211 for vox1  # 5994 for vox2, 7205 for vox1+vox2
 dataloader_options:
   batch_size: !ref <batch_size>
   shuffle: !ref <shuffle>
-  num_workers: 0
+  num_workers: 12
   max_seg_per_spk: 1000
-  nPerSpeaker: 2
+  nPerSpeaker: 1
   split_ratio: -1
 
 # # Augment options
@@ -64,7 +62,7 @@ augment_options:
     musan: !ref <noise_folder>/musan_split
     noise_vad: !ref <noise_folder>/NonverbalVocalization
     rirs: !ref <noise_folder>/RIRS_NOISES
-  augment_chain: ["env_corrupt", "time_domain", "spec_domain"]
+  augment_chain: ["env_corrupt", "time_domain"] # available: ["env_corrupt", "time_domain", "spec_domain"]
   noise_sets: ["noise", "speech", "music", "noise_vad", "noise_rirs"]
   noise_proportion: [0.1, 0.1, 0.1, 0.2, 0.5]
   noise_snr:
@@ -88,8 +86,8 @@ augment_options:
 
 ## Model definition
 model:
-  name: Raw_ECAPA
-  nOut: 512 #lin neurons
+  name: ResNetSE34
+  nOut: 256 #lin neurons
 
 classifier:
   input_size: !ref <model[nOut]>
@@ -97,7 +95,7 @@ classifier:
 
 ## criterion
 criterion:
-  name: ARmSoftmax
+  name: Softmax
   margin: 0.2
   scale: 30
   hard_prob: 0.5

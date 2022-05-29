@@ -37,35 +37,37 @@ warnings.simplefilter("ignore")
 
 def main_worker(gpu, nprocs, args):
     args.gpu = gpu  # if gpu == 0 means the main process
-    device = torch.device(f'{args.device}:{args.gpu}') if args.device == 'cuda' else torch.device('cpu')
-    ngpus_per_node = torch.cuda.device_count()  
+    device = torch.device(
+        f'{args.device}:{args.gpu}') if args.device == 'cuda' else torch.device('cpu')
+    ngpus_per_node = torch.cuda.device_count()
     print("Use GPU cuda:{} for training".format(args.gpu))
-    
+
     # paths
     args.model_save_path = os.path.join(
         args.save_folder, f"{args.model['name']}/{args.criterion['name']}/model")
 
     args.result_save_path = os.path.join(
         args.save_folder, f"{args.model['name']}/{args.criterion['name']}/result")
-    
+
     # TensorBoard
     os.makedirs(f"{args.result_save_path}/runs", exist_ok=True)
     if args.gpu == 0:
         writer = SummaryWriter(log_dir=f"{args.result_save_path}/runs")
-      
+
     # init parameters
     epoch = 1
     min_loss = float("inf")
     min_eer = float("inf")
 
     # Initialise data loader
-    args.dataloader_options['num_workers'] = int(args.dataloader_options['num_workers'] / ngpus_per_node)
+    args.dataloader_options['num_workers'] = int(
+        args.dataloader_options['num_workers'] / ngpus_per_node)
     train_loader = train_data_loader(args)
     max_iter_size = len(train_loader) // args.dataloader_options['nPerSpeaker']
-    
+
     # define net
-    s = SpeakerEncoder(**vars(args)) 
-  
+    s = SpeakerEncoder(**vars(args))
+
     # NOTE: Data parallelism for multi-gpu in BETA
     # init parallelism create net-> load weight -> add to parallelism
     if args.data_parallel:
@@ -73,8 +75,8 @@ def main_worker(gpu, nprocs, args):
             # dim = 0 [30, xxx] -> [10, ...], [10, ...], [10, ...] on 3 GPUs
             s = nn.DataParallel(
                 s, device_ids=[i for i in range(torch.cuda.device_count())])
-            device = 'cuda' # to the primary gpu
-            s = s.to(device)            
+            device = 'cuda'  # to the primary gpu
+            s = s.to(device)
         else:
             s = WrappedModel(s).to(device)
 
@@ -99,7 +101,7 @@ def main_worker(gpu, nprocs, args):
         s = WrappedModel(s).to(device)
 
     speaker_model = ModelHandling(s, **dict(vars(args), T_max=max_iter_size))
-    
+
     # Choose weight as pretrained model
     weight_path, start_lr, init_epoch = choose_model_state(args)
     if weight_path is not None:
@@ -120,24 +122,26 @@ def main_worker(gpu, nprocs, args):
     score_file_path = os.path.join(args.result_save_path, 'scores.txt')
     if args.gpu == 0:
         score_file = open(score_file_path, "a+")
-    
+
     # Training loop
     timer = time.time()
-    for epoch in range(init_epoch, args.number_of_epochs + 1):
+    for epoch in range(int(init_epoch), int(args.number_of_epochs + 1)):
         clr = [x['lr'] for x in speaker_model.__optimizer__.param_groups]
         if args.gpu == 0:
             print(time.strftime("%Y-%m-%d %H:%M:%S"), epoch,
                   "[INFO] Training %s with LR %f ---" % (args.model['name'], max(clr)))
 
         # Train network
-        loss, train_acc = speaker_model.fit(loader=train_loader, epoch=epoch, verbose=(args.gpu == 0))
+        loss, train_acc = speaker_model.fit(
+            loader=train_loader, epoch=epoch, verbose=(args.gpu == 0))
 
         if args.gpu == 0:
             # save best model
             if loss == min(min_loss, loss):
                 cprint(
                     text=f"[INFO] Loss reduce from {min_loss} to {loss}. Save the best state", fg='y')
-                speaker_model.saveParameters(args.model_save_path + "/best_state.pt")
+                speaker_model.saveParameters(
+                    args.model_save_path + "/best_state.pt")
 
                 speaker_model.saveParameters(args.model_save_path +
                                              f"/best_state_top{top_count}.pt")
@@ -160,10 +164,10 @@ def main_worker(gpu, nprocs, args):
                 min_eer = min(min_eer, result[1])
 
                 print("[INFO] Evaluating ",
-                    time.strftime("%H:%M:%S"),
-                    "LR %f, TEER/TAcc %2.2f, TLOSS %f, VEER %2.4f, MINEER %2.4f" %
-                    (max(clr), train_acc, loss, result[1], min_eer))
-                
+                      time.strftime("%H:%M:%S"),
+                      "LR %f, TEER/TAcc %2.2f, TLOSS %f, VEER %2.4f, MINEER %2.4f" %
+                      (max(clr), train_acc, loss, result[1], min_eer))
+
                 score_file.write(
                     "epoch %d, LR %f, TEER/TAcc %2.2f, TLOSS %f, VEER %2.4f, MINEER %2.4f\n"
                     % (epoch, max(clr), train_acc, loss, result[1], min_eer))
@@ -178,7 +182,7 @@ def main_worker(gpu, nprocs, args):
             else:
                 # test interval < 0 -> train non stop
                 score_file.write("epoch %d, LR %f, TEER/TAcc %2.2f, TLOSS %f\n" %
-                                (epoch, max(clr), train_acc, loss))
+                                 (epoch, max(clr), train_acc, loss))
 
                 with open(os.path.join(args.model_save_path, "model_state_log.txt"), 'w+') as log_file:
                     log_file.write(f"Epoch:{epoch}, LR:{max(clr)}, EER: {0}")
@@ -189,9 +193,11 @@ def main_worker(gpu, nprocs, args):
 
             # NOTE: consider save last state only or not, save only eer as the checkpoint for iterations
             if args.save_model_last:
-                speaker_model.saveParameters(args.model_save_path + "/last_state.pt")
+                speaker_model.saveParameters(
+                    args.model_save_path + "/last_state.pt")
             else:
-                speaker_model.saveParameters(args.model_save_path + "/model_state_%06d.pt" % epoch)
+                speaker_model.saveParameters(
+                    args.model_save_path + "/model_state_%06d.pt" % epoch)
 
             if ("nsml" in sys.modules):
                 training_report = {}
@@ -212,7 +218,8 @@ def main_worker(gpu, nprocs, args):
             if ((time.time() - timer) // 60) % args.ckpt_interval_minutes == 0:
                 # save every N mins and keep only top 3
                 current_time = 'Day_hour_min'
-                ckpt_list = glob.glob(args.model_save_path, '/ckpt_*')
+                ckpt_list = glob.glob(os.path.join(
+                    args.model_save_path + '/ckpt_*'))
                 if len(ckpt_list) == 3:
                     ckpt_list.sort()
                     subprocess.call(f'rm -f {ckpt_list[-1]}', shell=True)
@@ -226,30 +233,31 @@ def main_worker(gpu, nprocs, args):
     if args.gpu == 0:
         score_file.close()
         writer.close()
-    
+
     return
 
 #######################################
-## main fucntion
+# main fucntion
 ######################################
+
 
 def train(args):
     # For REPRODUCIBILITY purpose
     torch.backends.cudnn.benchmark = True
     torch.backends.cudnn.deterministic = True
-    
+
     # Training params saved
     with open(os.path.join(args.save_folder, f"{args.model['name']}/{args.criterion['name']}/result/settings.txt"), 'a+') as settings_file:
         settings_file.write(
             f'\n[TRAIN]------------------{time.strftime("%Y-%m-%d %H:%M:%S")}------------------\n')
         for items in vars(args):
-            settings_file.write('%s %s\n' % (items, vars(args)[items])) 
+            settings_file.write('%s %s\n' % (items, vars(args)[items]))
         settings_file.flush()
-        
-    ## Main run
+
+    # Main run
     print("Data Parallelism training:", args.data_parallel)
     print("Distributed Data Parallelism:", args.distributed)
-    
+
     try:
         if args.distributed:
             npugs = torch.cuda.device_count()
@@ -264,7 +272,7 @@ def train(args):
 
     sys.exit(1)
 
-       
+
 def choose_model_state(args):
     if args.gpu == 0:
         print(f"Using pretrained: {args.pretrained['use']}")
@@ -277,7 +285,8 @@ def choose_model_state(args):
         start_lr = args.lr
 
     # Load model weights
-    model_files = glob.glob(os.path.join(args.model_save_path, 'model_state_*.pt'))
+    model_files = glob.glob(os.path.join(
+        args.model_save_path, 'model_state_*.pt'))
     model_files.sort()
 
     # if exists best model load from epoch and load state from log model file
@@ -295,7 +304,7 @@ def choose_model_state(args):
             epoch = int(start_it)
         else:
             epoch = 1
-            
+
     # NOTE: Priority: defined pretrained > previous state from logger > scratch
     if args.pretrained['use']:
         choosen_state = args.pretrained['path']
@@ -308,7 +317,7 @@ def choose_model_state(args):
     else:
         epoch = 1
         start_lr = args.lr
-        choosen_state = None # "Train model from scratch!"
-    
+        choosen_state = None  # "Train model from scratch!"
+
     return choosen_state, start_lr, epoch
 # ============================ END =============================

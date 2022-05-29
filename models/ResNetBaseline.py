@@ -142,7 +142,7 @@ class ResNetSE(nn.Module):
 
         print('Embedding size is %d, encoder %s.' % (nOut, encoder_type))
         self.aug = kwargs['augment']
-        self.aug_chain = kwargs['augment_chain']
+        self.aug_chain = kwargs['augment_options']['augment_chain']
         self.inplanes = num_filters[0]
         self.encoder_type = encoder_type
         self.n_mels = n_mels
