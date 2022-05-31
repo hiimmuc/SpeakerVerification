@@ -217,7 +217,7 @@ def main_worker(gpu, nprocs, args):
             if args.ckpt_interval_minutes > 0:
                 if ((time.time() - timer) // 60) % args.ckpt_interval_minutes == 0:
                     # save every N mins and keep only top 3
-                    current_time = 'Day_hour_min'
+                    current_time = str(time.strftime("%Y%m%d_%H_%M"))
                     ckpt_list = glob.glob(os.path.join(
                         args.model_save_path , '/ckpt_*'))
                     if len(ckpt_list) == 3:
