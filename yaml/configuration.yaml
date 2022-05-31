@@ -1,27 +1,27 @@
 device: "cuda"
-seed: 1002
+seed: 3105
 
-# Directories
+## Directories
 output_folder: !ref backup/<seed>
 save_folder: !ref <output_folder>/save
 train_log: !ref <output_folder>/train_log.txt
 
 ## Paths
 skip_prep: True
-data_folder: dataset/train_data/zalo_ai
-train_annotation: !ref <save_folder>/metadata/train.txt
-valid_annotation: !ref <save_folder>/metadata/dev.txt
-
-evaluation_file: evaluate_file_path.txt
-verification_file: test_path.txt
+data_folder: dataset/train_data/tonghop
+train_annotation: !ref <save_folder>/metadata/train.csv
+valid_annotation: !ref <save_folder>/metadata/dev.csv
+#
+evaluation_file: dataset/test_data/test_callbot_raw/test_cb_v1_changepath.txt
+verification_file: log_service/check_log_combine/equitable_test.txt
 noise_folder: dataset/augment_data
 
-ckpt_interval_minutes: 15 # save checkpoint every N min, -1 to turn off
+ckpt_interval_minutes: 30 # save checkpoint every N min, -1 to turn off
 save_model_last: True
 
-# Training parameters
-number_of_epochs: 100 # max_epoch
-batch_size: 16 # batch_size
+## Training parameters
+number_of_epochs: 200 # max_epoch
+batch_size: 64 # batch_size
 lr: 0.001
 base_lr: 0.00000001 # min_lr
 max_lr: !ref <lr> # max lr for callbacks
@@ -29,7 +29,19 @@ step_size: 10 # depends on the callbacks, step size equal [2, 4, 6, 8] * len(tra
 shuffle: False
 random_chunk: True
 
-# Audio parameters
+## Number of speakers
+nClasses: 7907 # 1211 for vox1  # 5994 for vox2, 7205 for vox1+vox2
+
+## dataloader_options
+dataloader_options:
+  batch_size: !ref <batch_size>
+  shuffle: !ref <shuffle>
+  num_workers: 0
+  max_seg_per_spk: 500
+  nPerSpeaker: 2
+  split_ratio: -1
+
+## Audio parameters
 audio_spec:
   sample_rate: 8000 # sample_rate
   channels: 1
@@ -37,57 +49,16 @@ audio_spec:
   win_len: 0.025
   hop_len: 0.01 # Hop length is the length of the non-intersecting portion of window length
 
-# Feature parameters
+## Feature parameters
 n_mfcc: 80
 n_mels: 80
-features: melspectrogram
+features: raw
 lib: nnaudio
-
-# Number of speakers
-nClasses: 392 #1211 for vox1  # 5994 for vox2, 7205 for vox1+vox2
-
-# dataloader_options
-dataloader_options:
-  batch_size: !ref <batch_size>
-  shuffle: !ref <shuffle>
-  num_workers: 12
-  max_seg_per_spk: 1000
-  nPerSpeaker: 1
-  split_ratio: -1
-
-# # Augment options
-augment: False
-augment_options:
-  augment_paths:
-    musan: !ref <noise_folder>/musan_split
-    noise_vad: !ref <noise_folder>/NonverbalVocalization
-    rirs: !ref <noise_folder>/RIRS_NOISES
-  augment_chain: ["env_corrupt", "time_domain"] # available: ["env_corrupt", "time_domain", "spec_domain"]
-  noise_sets: ["noise", "speech", "music", "noise_vad", "noise_rirs"]
-  noise_proportion: [0.1, 0.1, 0.1, 0.2, 0.5]
-  noise_snr:
-    noise: [0, 5]
-    speech: [3, 20]
-    music: [5, 15]
-    noise_vad: [0, 15]
-    noise_rirs: [0, 15]
-  noise_samples:
-    noise: [1, 1]
-    speech: [3, 7]
-    music: [1, 1]
-    noise_vad: [1, 1]
-    noise_rirs: [1, 1]
-  augment_time_domain:
-    volume: 6
-    speed: [0.95, 1.05]
-    pitch: [-0.5, 0.5]
-    proportion: [0.25, 0.25, 0.25]
-    combined: False
 
 ## Model definition
 model:
-  name: ResNetSE34
-  nOut: 256 #lin neurons
+  name: Raw_ECAPA
+  nOut: 512 #lin neurons
 
 classifier:
   input_size: !ref <model[nOut]>
@@ -95,7 +66,7 @@ classifier:
 
 ## criterion
 criterion:
-  name: Softmax
+  name: ARmSoftmax
   margin: 0.2
   scale: 30
   hard_prob: 0.5
@@ -119,10 +90,39 @@ callbacks:
 early_stopping: False
 es_patience: 15
 
-# Using pretrain
+## Using pretrain
 pretrained:
-  use: False
-  path: backup/Raw_ECAPA/AAmSoftmax/model/best_state.pt
+  use: True
+  path: backup/1001/Raw_ECAPA/ARmSoftmax/model/best_state_top4.pt
+  
+## Augment options
+augment: True
+augment_options:
+  augment_paths:
+    musan: !ref <noise_folder>/musan_split
+    noise_vad: !ref <noise_folder>/noise_vad
+    rirs: !ref <noise_folder>/RIRS_NOISES
+  augment_chain: ["env_corrupt", "time_domain"] # available: ["env_corrupt", "time_domain", "spec_domain"]
+  noise_sets: ["noise", "speech", "music", "noise_vad", "noise_rirs"]
+  noise_proportion: [0.0, 0.2, 0.1, 0.2, 0.5]
+  noise_snr:
+    noise: [0, 5]
+    speech: [3, 20]
+    music: [5, 15]
+    noise_vad: [0, 15]
+    noise_rirs: [0, 15]
+  noise_samples:
+    noise: [1, 1]
+    speech: [3, 7]
+    music: [1, 1]
+    noise_vad: [1, 1]
+    noise_rirs: [1, 1]
+  augment_time_domain:
+    volume: 4
+    speed: [0.95, 1.05]
+    pitch: [-0.5, 0.5]
+    proportion: [0.25, 0.25, 0.25]
+    combined: False
 
 ## testing
 test_interval: -1
@@ -130,14 +130,14 @@ dcf:
   dcf_p_target: 0.05
   dcf_c_miss: 1
   dcf_c_fa: 1
-num_eval: 10
+num_eval: 20
 prepare: embed # 'embed / cohorts'
 cohort_size: !ref <nClasses> * 3
-test_threshold: 0.5
+test_threshold: 0
 scoring_mode: cosine
 log_test_files:
-  ref: !ref <verification_file>
-  com: !ref <verification_file>.replace('.txt', '_results.txt')
+  ref: log_service/check_log_combine/equitable_test_truth.txt
+  com: !ref <log_test_files[ref]>.replace('.txt', '_results.txt')
 # initial_model test:
-initial_model_infer: backup/Raw_ECAPA/model/best_state.model
+initial_model_infer: !ref <pretrained[path]>
 cohorts_path: !ref <save_folder>/cohort_<model[name]>.np
