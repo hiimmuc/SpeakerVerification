@@ -103,7 +103,7 @@ def main_worker(gpu, nprocs, args):
     speaker_model = ModelHandling(s, **dict(vars(args), T_max=max_iter_size))
 
     # Choose weight as pretrained model
-    weight_path, start_lr, init_epoch = choose_model_state(args, priority='previous')
+    weight_path, start_lr, init_epoch = choose_model_state(args, priority='defined')
     if weight_path is not None:
         if args.gpu == 0:
             print("Load model from:", weight_path)
@@ -214,21 +214,21 @@ def main_worker(gpu, nprocs, args):
                     score_file.close()
                     writer.close()
                     break
+            if args.ckpt_interval_minutes > 0:
+                if ((time.time() - timer) // 60) % args.ckpt_interval_minutes == 0:
+                    # save every N mins and keep only top 3
+                    current_time = 'Day_hour_min'
+                    ckpt_list = glob.glob(os.path.join(
+                        args.model_save_path , '/ckpt_*'))
+                    if len(ckpt_list) == 3:
+                        ckpt_list.sort()
+                        subprocess.call(f'rm -f {ckpt_list[-1]}', shell=True)
+                    speaker_model.saveParameters(
+                        args.model_save_path + f"/ckpt_{current_time}.pt")
 
-            if ((time.time() - timer) // 60) % args.ckpt_interval_minutes == 0:
-                # save every N mins and keep only top 3
-                current_time = 'Day_hour_min'
-                ckpt_list = glob.glob(os.path.join(
-                    args.model_save_path , '/ckpt_*'))
-                if len(ckpt_list) == 3:
-                    ckpt_list.sort()
-                    subprocess.call(f'rm -f {ckpt_list[-1]}', shell=True)
-                speaker_model.saveParameters(
-                    args.model_save_path + f"/ckpt_{current_time}.pt")
-
-                writer.add_scalar('Loss/train', loss, epoch)
-                writer.add_scalar('Accuracy/train', train_acc, epoch)
-                writer.add_scalar('Params/learning_rate', max(clr), epoch)
+            writer.add_scalar('Loss/train', loss, epoch)
+            writer.add_scalar('Accuracy/train', train_acc, epoch)
+            writer.add_scalar('Params/learning_rate', max(clr), epoch)
 
     if args.gpu == 0:
         score_file.close()
