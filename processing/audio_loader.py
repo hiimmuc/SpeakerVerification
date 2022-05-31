@@ -74,9 +74,6 @@ def loadWAV(audio_source, audio_spec,
         audio_source = str(Path(audio_source))  # to compatible with most os
         if read_mode == 'sf':
             audio, sr = sf.read(audio_source)
-        elif read_mode == 'torchaudio':
-            audio, sr = torchaudio.load(audio_source)
-            audio = audio.numpy()
         else:
             # read audio using Audio Segments
             audio_seg = AudioSegment.from_file(audio_source)
@@ -101,25 +98,30 @@ def loadWAV(audio_source, audio_spec,
     else:
         raise "Invalid format of audio source, available: str, ndarray"
 
-    audiosize = audio.shape[0]
-
-    # Maximum audio length counted in frames
-    # winlength 25ms, and hop 10ms with sr = 8000 -> hoplen = 80 winlen = 200 
-    # total length  = (winlength- hop_length) + max_frames * hop_length
-
-    n_hop_frames = int(audio_spec['hop_len'] * set_sample_rate)
-    n_win_frames = int(audio_spec['win_len'] * set_sample_rate)
-    max_audio = int(audio_spec['sentence_len'] * set_sample_rate) # max_audio = int(max_frames * n_hop_frames + n_overlap_frames)
     
-    n_overlap_frames = n_win_frames - n_hop_frames
-    max_frames = round((max_audio - n_overlap_frames) / n_hop_frames)
+    if load_all:
+        return np.expand_dims(audio, 0)
+    else:
+        audiosize = audio.shape[0]
+        
+        # Maximum audio length counted in frames
+        # winlength 25ms, and hop 10ms with sr = 8000 -> hoplen = 80 winlen = 200 
+        # total length  = (winlength- hop_length) + max_frames * hop_length
 
-    if max_frames > 0 and not load_all:
+        n_hop_frames = int(audio_spec['hop_len'] * set_sample_rate)
+        n_win_frames = int(audio_spec['win_len'] * set_sample_rate)
+        max_audio = int(audio_spec['sentence_len'] * set_sample_rate) # max_audio = int(max_frames * n_hop_frames + n_overlap_frames)
+
+        n_overlap_frames = n_win_frames - n_hop_frames
+        max_frames = round((max_audio - n_overlap_frames) / n_hop_frames)
+        assert max_frames > 0, "invalid size of frame"
+
         if audiosize <= max_audio:
             shortage = max_audio - audiosize + 1
             audio = np.pad(audio, (0, shortage), 'wrap')
             audiosize = audio.shape[0]
-
+        
+        ## get start index
         if evalmode:
             # get num_eval of audio and stack together
             startframe = np.linspace(0, audiosize - max_audio, num=num_eval)
@@ -130,6 +132,7 @@ def loadWAV(audio_source, audio_spec,
                     [np.int64(random.random() * (audiosize - max_audio))])
             else:
                 startframe = np.array([0])
+                
         feats = []
         if evalmode and num_eval == 0:
             feats.append(audio)
@@ -140,9 +143,7 @@ def loadWAV(audio_source, audio_spec,
         feat = np.stack(feats, axis=0).astype(np.float)
 
         return feat
-    else:
-        # return whole audio
-        return np.expand_dims(audio, 0)
+
 
 # Environment corruption
 
