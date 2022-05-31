@@ -256,21 +256,18 @@ class DataGenerator():
         classpaths = [d for d in root.iterdir() if d.is_dir()]
         classpaths.sort()
 
-        if 0 < num_spks < len(classpaths) + 1:
-            classpaths = classpaths[:num_spks]
-        elif num_spks == -1:
-            pass
-        else:
-            raise "Invalid number of speakers"
+        if num_spks == -1:
+            num_spks = len(classpaths)
 
-        print('Generate dataset metadata files, total:', len(classpaths))
+        print('Generate dataset metadata files, total:', num_spks)
         print("Minimum utterances per speaker required:", lower_num)
         print("Maximum utterances per speaker required:", upper_num)
         
         train_filepaths_list = []
         val_filepaths_list = []
-
-        for classpath in tqdm(list(classpaths)[:], desc="Processing:..."):
+        
+        loader_bar =  tqdm(list(classpaths)[:], desc="Processing:...")
+        for classpath in loader_bar:
             filepaths = list(classpath.glob('*.wav'))
 
             # filtering dataset
@@ -301,6 +298,9 @@ class DataGenerator():
                 continue
 
             valid_spks.append(str(Path(classpath)))
+            
+            if len(valid_spks) > num_spks:
+                break
 
             random.shuffle(filepaths)
 
@@ -320,11 +320,14 @@ class DataGenerator():
                 spkID = str(train_filepath.parent.stem.split('-')[0])
                 ext = str(train_filepath).split('.')[-1]
                 duration, rate = get_audio_properties(str(train_filepath))
-                train_filepaths_list.append([spkID, str(train_filepath), duration, ext]) # add more here
-
+                train_filepaths_list.append([spkID, str(train_filepath), duration, ext]) 
+                
             val_filepaths_list.append(val_filepaths)
+            
+            # set post fix for tqdm
+            loader_bar.set_postfix(Valid_speakers=f" {len(valid_spks)} speakers")
 
-        # gathering val files
+        ######################## gathering val files #########################
         val_pairs = []
         for val_filepaths in tqdm(val_filepaths_list, desc="Generating validation file..."):
             for i in range(len(val_filepaths) - 1):
@@ -356,9 +359,9 @@ class DataGenerator():
 
         with open(Path(root.parent, f'metadata/valid.csv'), 'w', newline='') as wf:
             spamwriter = csv.writer(wf, delimiter=',')
-            spamwriter.writerow(['label', 'audio1', 'audio1'])
-            for label, audio1, audio1 in val_pairs:
-                  spamwriter.writerow([label, audio1, audio1])
+            spamwriter.writerow(['label', 'audio1', 'audio2'])
+            for label, audio1, audio2 in val_pairs:
+                  spamwriter.writerow([label, audio1, audio2])
 
         # copy to save dir
         os.makedirs(Path(self.args.train_annotation).parent, exist_ok=True)

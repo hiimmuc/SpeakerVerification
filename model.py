@@ -17,6 +17,7 @@ from torch.cuda.amp import autocast, GradScaler
 
 from processing.audio_loader import loadWAV
 from utils import (similarity_measure, cprint)
+from dataloader import test_data_loader
 
 
 class WrappedModel(nn.Module):
@@ -59,13 +60,13 @@ class SpeakerEncoder(nn.Module):
         if self.features in ['mfcc', 'melspectrogram']:
             Features_extractor = importlib.import_module(
                 'models.FeatureExtraction.feature').__getattribute__(f"{features.lower()}")
-            self.compute_features = Features_extractor(**kwargs)
+            self.compute_features = Features_extractor(**kwargs).to(self.device)
         else:
             self.compute_features = None   
                 
         SpeakerNetModel = importlib.import_module(
             'models.' + self.model['name']).__getattribute__('MainModel')
-        self.__S__ = SpeakerNetModel(nOut=self.model['nOut'], **kwargs)      
+        self.__S__ = SpeakerNetModel(nOut=self.model['nOut'], **kwargs).to(self.device)
         
         LossFunction = importlib.import_module(
             'losses.' + self.criterion['name']).__getattribute__(f"{self.criterion['name']}")
@@ -207,7 +208,7 @@ class ModelHandling(object):
         top1 = 0  # EER or accuracy
            
         if verbose:
-            loader_bar = tqdm(loader, desc=f">EPOCH_{epoch}", unit="it", colour="green")
+            loader_bar = tqdm(loader, desc=f">EPOCH_{epoch}", unit="it", colour="green", total=self.T_max)
         else:
             loader_bar = loader
         
@@ -226,11 +227,11 @@ class ModelHandling(object):
                 self.scaler.update()
             else:
                 nloss, prec1 = self.__model__.forward(data, label)
-                nloss.mean().backward()
+                nloss.backward()
                 self.__optimizer__.step()
 
-            loss += nloss.detach().cpu()
-            top1 += prec1.detach().cpu()
+            loss += nloss.detach().cpu().item()
+            top1 += prec1.detach().cpu().item()
             counter += 1
 
             # update tqdm bar
@@ -307,24 +308,15 @@ class ModelHandling(object):
         # Read all lines
         with open(listfilename) as listfile:
             lines = listfile.readlines()
-            
-            # for line in lines:
-            #     data = line.split()
-
-            #     # Append random label if missing
-            #     if len(data) == 2:
-            #         data = [random.randint(0, 1)] + data
-
-            #     files.append(data[1])
-            #     files.append(data[2])
-            #     lines.append(line)
-                
+                            
         ## Get a list of unique file names
         files = list(itertools.chain(*[x.strip().split()[-2:] for x in lines]))
         setfiles = list(set(files))
         setfiles.sort()
 
-        test_dataset = test_loader(setfiles, num_eval=num_eval, **kwargs)
+        test_dataset = test_data_loader(test_list=setfiles,
+                                        audio_spec=self.audio_spec, 
+                                        num_eval=num_eval, **kwargs)
         
         if distributed:
             sampler = torch.utils.data.distributed.DistributedSampler(
@@ -345,11 +337,17 @@ class ModelHandling(object):
 
         # Save all features to dictionary
         loader_bar = tqdm(
-            test_loader, desc=">>>>Reading file: ", unit="files", colour="red")
-        for idx, data in enumerate(loader_bar):
-            (audio, filename) = data[:][0]
+            setfiles, desc=">>>>Reading file: ", unit="files", colour="red")
+        for idx, filename in enumerate(loader_bar):
+            audio = loadWAV(filename, 
+                            self.audio_spec,
+                            evalmode=True,
+                            augment=False,
+                            augment_options=[],
+                            num_eval=num_eval,
+                            random_chunk=False)
             
-            inp1 = torch.FloatTensor(audio).to(self.device)                        
+            inp1 = torch.FloatTensor(audio).unsqueeze(0).to(self.device)                  
 
             with torch.no_grad():
                 ref_feat = self.__model__.forward(inp1).detach().cpu()
@@ -376,15 +374,11 @@ class ModelHandling(object):
 
             for idx, line in enumerate(tqdm(lines, desc=">>>>Computing files", unit="pairs", colour="MAGENTA")):
                 data = line.split()
-
-                # Append random label if missing
-                if len(data) == 2:
-                    data = [random.randint(0, 1)] + data
-
+                #label, audio1, audio2
                 ref_feat = feats[data[1]].to(self.device)
                 com_feat = feats[data[2]].to(self.device)
 
-                if self.__model__.test_normalize:
+                if self.__model__.module.test_normalize:
                     ref_feat = F.normalize(ref_feat, p=2, dim=1)
                     com_feat = F.normalize(com_feat, p=2, dim=1)
 
@@ -417,9 +411,10 @@ class ModelHandling(object):
     ## Testing files from list of testing pairs
     ## ===== ===== ===== ===== ===== ===== ===== =====
     def testFromList(self,
-                     root,
                      test_list='evaluation_test.txt',
                      thresh_score=0.5,
+                     distributed=False,
+                     dataloader_options=None,
                      cohorts_path=None,
                      num_eval=10,
                      scoring_mode='norm',
@@ -445,9 +440,9 @@ class ModelHandling(object):
         cohorts = None
         if cohorts_path is not None and scoring_mode == 'norm':
             cohorts = np.load(cohorts_path)
-        save_root = self.save_path + f"/{self.model_name}/result"
+        save_root = os.path.join(self.save_path , f"{self.__model__.module.model['name']}/{self.__model__.module.criterion['name']}/result")
 
-        data_root = Path(root)
+        
         read_file = Path(test_list)
         if output_file is None:
             output_file = test_list.replace('.txt','_result.txt')
@@ -469,9 +464,15 @@ class ModelHandling(object):
 
         # Save all features to feat dictionary
         for idx, filename in enumerate(tqdm(setfiles, desc=">>>>Reading file: ", unit="files", colour="red")):
-            audio = loadWAV(filename.replace('\n', ''), evalmode=True, **self.kwargs)
+            audio = loadWAV(filename, 
+                            self.audio_spec,
+                            evalmode=True,
+                            augment=False,
+                            augment_options=[],
+                            num_eval=num_eval,
+                            random_chunk=False)
             
-            inp1 = torch.FloatTensor(audio).to(self.device)
+            inp1 = torch.FloatTensor(audio).unsqueeze(0).to(self.device)
 
             with torch.no_grad():
                 ref_feat = self.__model__.forward(inp1).detach().cpu()
@@ -486,7 +487,7 @@ class ModelHandling(object):
                 ref_feat = feats[data[0]].to(self.device)
                 com_feat = feats[data[1]].to(self.device)
 
-                if self.__model__.test_normalize:
+                if self.__model__.module.test_normalize:
                     ref_feat = F.normalize(ref_feat, p=2, dim=1)
                     com_feat = F.normalize(com_feat, p=2, dim=1)
 

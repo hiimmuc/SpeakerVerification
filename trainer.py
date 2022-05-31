@@ -63,7 +63,7 @@ def main_worker(gpu, nprocs, args):
     args.dataloader_options['num_workers'] = int(
         args.dataloader_options['num_workers'] / ngpus_per_node)
     train_loader = train_data_loader(args)
-    max_iter_size = len(train_loader) // args.dataloader_options['nPerSpeaker']
+    max_iter_size = len(train_loader) // (args.dataloader_options['nPerSpeaker'] * ngpus_per_node) 
 
     # define net
     s = SpeakerEncoder(**vars(args))
@@ -75,7 +75,7 @@ def main_worker(gpu, nprocs, args):
             # dim = 0 [30, xxx] -> [10, ...], [10, ...], [10, ...] on 3 GPUs
             s = nn.DataParallel(
                 s, device_ids=[i for i in range(torch.cuda.device_count())])
-            device = 'cuda'  # to the primary gpu
+            # device = 'cuda'  # to the primary gpu
             s = s.to(device)
         else:
             s = WrappedModel(s).to(device)
@@ -103,7 +103,7 @@ def main_worker(gpu, nprocs, args):
     speaker_model = ModelHandling(s, **dict(vars(args), T_max=max_iter_size))
 
     # Choose weight as pretrained model
-    weight_path, start_lr, init_epoch = choose_model_state(args)
+    weight_path, start_lr, init_epoch = choose_model_state(args, priority='previous')
     if weight_path is not None:
         if args.gpu == 0:
             print("Load model from:", weight_path)
@@ -219,7 +219,7 @@ def main_worker(gpu, nprocs, args):
                 # save every N mins and keep only top 3
                 current_time = 'Day_hour_min'
                 ckpt_list = glob.glob(os.path.join(
-                    args.model_save_path + '/ckpt_*'))
+                    args.model_save_path , '/ckpt_*'))
                 if len(ckpt_list) == 3:
                     ckpt_list.sort()
                     subprocess.call(f'rm -f {ckpt_list[-1]}', shell=True)
@@ -273,7 +273,7 @@ def train(args):
     sys.exit(1)
 
 
-def choose_model_state(args):
+def choose_model_state(args, priority='defined'):
     if args.gpu == 0:
         print(f"Using pretrained: {args.pretrained['use']}")
     # load state from log file
@@ -306,14 +306,16 @@ def choose_model_state(args):
             epoch = 1
 
     # NOTE: Priority: defined pretrained > previous state from logger > scratch
-    if args.pretrained['use']:
+    if args.pretrained['use'] and priority == 'defined':
         choosen_state = args.pretrained['path']
         epoch = 1
         args.lr = start_lr
-    elif prev_model_state:
+
+    elif prev_model_state and priority== 'previous':
         choosen_state = prev_model_state
         args.lr = start_lr
         epoch = start_it
+        
     else:
         epoch = 1
         start_lr = args.lr

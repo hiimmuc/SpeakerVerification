@@ -23,9 +23,11 @@ from utils import ComputeErrorRates, ComputeMinDcf, tuneThresholdfromScore
 
 
 def inference(args):
-    net = SpeakerEncoder(**vars(args))
+    net = WrappedModel(SpeakerEncoder(**vars(args)))
+       
     max_iter_size = args.step_size
-    model = ModelHandling(
+    
+    speaker_model = ModelHandling(
         net, **dict(vars(args), T_max=max_iter_size))
 
     model_save_path = os.path.join(
@@ -74,22 +76,22 @@ def inference(args):
         copy_name = None
 
     print(f'Loading model from {chosen_model_state}')
-    model.loadParameters(chosen_model_state)
-    model.eval()
+    speaker_model.loadParameters(chosen_model_state)
+    speaker_model.__model__.eval()
 
     # set defalut threshold
-    threshold = args.test_threshold
+    threshold_set = args.test_threshold
     scoring_mode = args.scoring_mode
     num_eval = args.num_eval
 
     # Evaluation from list
     if args.eval is True:
 
-        sc, lab, trials = model.evaluateFromList(
-            args.eval_list,
+        sc, lab, trials = speaker_model.evaluateFromList(
+            listfilename=args.evaluation_file,
+            distributed=args.distributed,
             dataloader_options=args.dataloader_options,
             cohorts_path=args.cohorts_path,
-            eval_frames=args.eval_frames,
             num_eval=args.num_eval,
             scoring_mode=scoring_mode)
 
@@ -104,7 +106,7 @@ def inference(args):
         ####
         fnrs, fprs, thresholds = ComputeErrorRates(sc, lab)
         mindcf, threshold = ComputeMinDcf(
-            fnrs, fprs, thresholds, args.dcf_p_target, args.dcf_c_miss, args.dcf_c_fa)
+            fnrs, fprs, thresholds, args.dcf['dcf_p_target'], args.dcf['dcf_c_miss'], args.dcf['dcf_c_fa'])
         ####
 
         # print('tfa [thre, fpr, fnr]')
@@ -119,20 +121,20 @@ def inference(args):
 
         print("\n[RESULTS]\nROC:",
               f"Best sum rate {best_sum_rate} at {best_tfa}, AUC {result['roc'][2]}\n",
-              f">> EER {result['roc'][1]}% min-DCF {mindcf:.5f} at threshold {result['roc'][-1]}\n",
+              f">> EER {result['roc'][1]}%  min-DCF {mindcf:.5f} at threshold {result['roc'][-1]}\n",
               f">> Gmean result: \n>>> EER: {(1 - result['gmean'][1]) * 100}% at threshold {result['gmean'][2]}\n>>> ACC: {result['gmean'][1] * 100}%\n",
               f">> F-score {result['prec_recall'][2]}% at threshold {result['prec_recall'][-1]}\n")
 
         score_file.writelines(
-            [f"[Evaluation] result on: [{args.eval_list}] with [{args.initial_model_infer}]\n",
+            [f"[Evaluation] result on: [{args.evaluation_file}] with [{args.initial_model_infer}]\n",
              f"Best sum rate {best_sum_rate} at {best_tfa}\n",
-             f" EER {result['roc'][1]}% at threshold {result['roc'][-1]}\nAUC {result['roc'][2]}\n",
+             f" EER {result['roc'][1]}%  min-DCF {mindcf:.5f} at threshold {result['roc'][-1]}\nAUC {result['roc'][2]}\n",
              f"Gmean result:\n",
              f"EER: {(1 - result['gmean'][1]) * 100}% at threshold {result['gmean'][2]}\n>>> ACC: {result['gmean'][1] * 100}%\n=================>\n"])
         score_file.close()
 
         # write to file
-        write_file = Path(result_save_path, 'evaluation_results.txt')
+        write_file = Path(result_save_path, 'evaluation_results.csv')
         fa_pairs = []
         fr_pairs = []
         
@@ -162,6 +164,8 @@ def inference(args):
                   f"\n0's: {prec_recall[1][0]}\n1's: {prec_recall[1][1]}")
             for b in beta_values:
                 print(f"F-{b}:", prec_recall[2][b])
+                
+        ## print out false pairs
         with open(Path(result_save_path, 'false_rejected_pairs.txt'), 'w') as wf:
             wf.writelines(fr_pairs)
         with open(Path(result_save_path, 'false_accepted_pairs.txt'), 'w') as wf:
@@ -179,18 +183,50 @@ def inference(args):
 
     # Test from list (audio1,audio2) and compare to truth file
     if args.test is True:
-        model.testFromList(args.test_list,
-                           cohorts_path=args.cohorts_path,
-                           thre_score=threshold,
-                           print_interval=1,
-                           eval_frames=args.eval_frames,
-                           scoring_mode=scoring_mode,
-                           output_file=args.com, num_eval=num_eval)
+        if threshold_set == 0:
+            sc, lab, trials = speaker_model.evaluateFromList(
+                listfilename=args.evaluation_file,
+                distributed=args.distributed,
+                dataloader_options=args.dataloader_options,
+                cohorts_path=args.cohorts_path,
+                num_eval=args.num_eval,
+                scoring_mode=scoring_mode)
+
+            target_fa = np.linspace(5, 0, num=50)
+
+            result = tuneThresholdfromScore(sc, lab, target_fa)
+            ####
+
+            # print('tfa [thre, fpr, fnr]')
+            best_sum_rate = 999
+            best_tfa = None
+            for i, tfa in enumerate(target_fa):
+                # print(tfa, result[0][i])
+                sum_rate = result['roc'][0][i][1] + result['roc'][0][i][2]
+                if sum_rate < best_sum_rate:
+                    best_sum_rate = sum_rate
+                    best_tfa = result['roc'][0][i]
+
+            print("\n[RESULTS]\nROC:",
+                  f"Best sum rate {best_sum_rate} at {best_tfa}, AUC {result['roc'][2]}\n",
+                  f">> EER {result['roc'][1]}% at threshold {result['roc'][-1]}\n",
+                  f">> Gmean result: \n>>> EER: {(1 - result['gmean'][1]) * 100}% at threshold {result['gmean'][2]}\n>>> ACC: {result['gmean'][1] * 100}%\n",
+                  f">> F-score {result['prec_recall'][2]}% at threshold {result['prec_recall'][-1]}\n")
+            threshold_set =  result['roc'][-1]
+            
+        speaker_model.testFromList(args.verification_file,
+                                   thresh_score=threshold_set,
+                                   output_file=args.log_test_files['com'],
+                                   distributed=args.distributed,
+                                   dataloader_options=args.dataloader_options,
+                                   cohorts_path=args.cohorts_path,
+                                   num_eval=args.num_eval,
+                                   scoring_mode=scoring_mode)
 
         roc, prec_recall = evaluate_result(path=args.log_test_files['com'], ref=args.log_test_files['ref'])
         test_log_file.writelines([f">{time.strftime('%Y-%m-%d %H:%M:%S')}<",
-                                  f"Test result on: [{args.test_list}] with [{args.initial_model_infer}]\n",
-                                  f"Threshold: {threshold}\n",
+                                  f"Test result on: [{args.verification_file}] with [{args.initial_model_infer}]\n",
+                                  f"Threshold: {threshold_set}\n",
                                   f"ROC: {roc}\n",
                                   f"Report: \n{prec_recall}\n",
                                   f"Save to {args.log_test_files['com']} and {args.log_test_files['ref']} \n========================================\n"])
@@ -199,7 +235,7 @@ def inference(args):
 
     # Prepare embeddings for cohorts/verification
     if args.prepare is True:
-        model.prepare(eval_frames=args.eval_frames,
+        speaker_model.prepare(eval_frames=args.eval_frames,
                       source=args.train_annotation,
                       save_path=args.cohorts_path,
                       num_eval=num_eval,
@@ -239,10 +275,10 @@ def inference(args):
         same_smallest_score = 1
         diff_biggest_score = 0
         for f in tqdm(files):
-            embed = model.embed_utterance(f,
+            embed = speaker_model.embed_utterance(f,
                                           eval_frames=args.eval_frames,
                                           num_eval=num_eval,
-                                          normalize=model.__L__.test_normalize)
+                                          normalize=speaker_model.__L__.test_normalize)
             embed = embed.unsqueeze(-1)
             dist = F.pairwise_distance(embed, embeds).detach().cpu().numpy()
             dist = np.mean(dist, axis=0)

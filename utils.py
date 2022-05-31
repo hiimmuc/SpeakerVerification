@@ -57,10 +57,12 @@ class PreEmphasis(torch.nn.Module):
         assert len(input.size(
         )) == 2, f'The number of dimensions of input tensor must be 2, got {input.size()}'
         # reflect padding to match lengths of in/out
-        input = input.unsqueeze(1)
+        inp_device = input.get_device()
+        model_device = self.flipped_filter.get_device()
+        input = input.unsqueeze(1).to(model_device)
         input = F.pad(input, (1, 0), 'reflect')
-
-        return F.conv1d(input, self.flipped_filter).squeeze(1)
+        output = F.conv1d(input, self.flipped_filter).squeeze(1)
+        return output.to(inp_device)
 
 
 def tuneThresholdfromScore(scores, labels, target_fa, target_fr=None):

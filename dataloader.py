@@ -259,19 +259,20 @@ def train_data_loader(args):
     return train_loader
 
 
-class test_dataset_loader(Dataset):
-    def __init__(self, test_list, test_path, eval_frames, num_eval, **kwargs):
-        self.max_frames = eval_frames
+class test_data_loader(Dataset):
+    def __init__(self, test_list, audio_spec, num_eval, **kwargs):
         self.num_eval = num_eval
-        self.test_path = test_path
+        self.audio_spec = audio_spec
         self.test_list = test_list
 
     def __getitem__(self, index):
-        audio = loadWAV(os.path.join(
-            self.test_path, self.test_list[index]),
-            self.max_frames,
-            evalmode=True,
-            num_eval=self.num_eval, random_chunk=False)
+        audio = loadWAV(self.test_list[index], 
+                        self.audio_spec,
+                        evalmode=True,
+                        augment=False,
+                        augment_options=[],
+                        num_eval=self.num_eval,
+                        random_chunk=False)
         return torch.FloatTensor(audio), self.test_list[index]
 
     def __len__(self):
