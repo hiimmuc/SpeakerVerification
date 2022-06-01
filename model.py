@@ -98,7 +98,7 @@ class SpeakerEncoder(nn.Module):
     def forward(self, data, label=None):
         # data = data.reshape(-1,data.size()[-1]).to(self.device)
         data = data.to(self.device)
-        # data size: n_speaker x bsize x n_samples
+        # data size: n_speaker x batch_size x n_samples
         feat = []
         # forward n utterances per speaker and stack the output
         for inp in data:
@@ -176,12 +176,10 @@ class ModelHandling(object):
                                                          lr_decay=optimizer['lr_decay'], **dict(kwargs, T_max=self.T_max))
         elif self.callback['name'] == 'reduceOnPlateau':
             Scheduler = importlib.import_module(
-                'callbacks.' + callbacks).__getattribute__('LRScheduler')
+                'callbacks.' + self.callback['name']).__getattribute__('LRScheduler')
             self.__scheduler__ = Scheduler(self.__optimizer__, 
-                                           step_size=self.callback['step_size'], 
-                                           lr_decay=optimizer['lr_decay'], 
-                                           patience=self.callback['step_size'], 
-                                           min_lr=self.callback['base_lr'], factor=0.95)
+                                           patience=self.kwargs['step_size'],
+                                           min_lr=self.kwargs['base_lr'], factor=0.95)
             self.lr_step = 'epoch'
         
         assert self.lr_step in ['epoch', 'iteration']
@@ -200,8 +198,6 @@ class ModelHandling(object):
             tuple: loss and precision
         '''
         self.__model__.train()
-
-        stepsize = loader.batch_size
 
         counter = 0
         loss = 0
@@ -236,22 +232,22 @@ class ModelHandling(object):
 
             # update tqdm bar
             if verbose:
-                loader_bar.set_postfix(LR=f"{round(float(self.__optimizer__.param_groups[0]['lr']), 8)}", 
+                loader_bar.set_postfix(LR=f"{round(float(self.__optimizer__.param_groups[0]['lr']), 6)}", 
                                        TLoss=f"{round(float(loss / counter), 5)}", 
-                                       TAcc=f"{round(float(top1 / counter), 3)}%")
+                                       TAcc=f"{round(float(top1 / counter), 4)}%")
 
             if self.lr_step == 'iteration':
                 self.__scheduler__.step()
 
         # select mode for callbacks
-        if self.lr_step == 'epoch' and self.callback not in ['reduceOnPlateau', 'auto']:
+        if self.lr_step == 'epoch' and self.callback['name'] not in ['reduceOnPlateau', 'auto']:
             self.__scheduler__.step()
 
-        elif self.callback == 'reduceOnPlateau':
+        elif self.callback['name'] == 'reduceOnPlateau':
             # reduce on plateau
             self.__scheduler__(loss / counter)
 
-        elif self.callback == 'auto':
+        elif self.callback['name'] == 'auto':
             if epoch <= 50:
                 self.__scheduler__['rop'](loss / counter)
             else:

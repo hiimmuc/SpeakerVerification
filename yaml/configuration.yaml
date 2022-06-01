@@ -1,5 +1,5 @@
 device: "cuda"
-seed: 3105
+seed: 106
 
 ## Directories
 output_folder: !ref backup/<seed>
@@ -8,7 +8,7 @@ train_log: !ref <output_folder>/train_log.txt
 
 ## Paths
 skip_prep: True
-data_folder: dataset/train_data/tonghop
+data_folder: dataset/train_data/zalo_ai
 train_annotation: !ref <save_folder>/metadata/train.csv
 valid_annotation: !ref <save_folder>/metadata/dev.csv
 #
@@ -20,8 +20,8 @@ ckpt_interval_minutes: 30 # save checkpoint every N min, -1 to turn off
 save_model_last: True
 
 ## Training parameters
-number_of_epochs: 200 # max_epoch
-batch_size: 64 # batch_size
+number_of_epochs: 500 # max_epoch
+batch_size: 8 # batch_size
 lr: 0.001
 base_lr: 0.00000001 # min_lr
 max_lr: !ref <lr> # max lr for callbacks
@@ -30,13 +30,13 @@ shuffle: False
 random_chunk: True
 
 ## Number of speakers
-nClasses: 7907 # 1211 for vox1  # 5994 for vox2, 7205 for vox1+vox2
+nClasses: 400 # 1211 for vox1  # 5994 for vox2, 7205 for vox1+vox2
 
 ## dataloader_options
 dataloader_options:
   batch_size: !ref <batch_size>
   shuffle: !ref <shuffle>
-  num_workers: 0
+  num_workers: 4
   max_seg_per_spk: 500
   nPerSpeaker: 2
   split_ratio: -1
@@ -45,7 +45,7 @@ dataloader_options:
 audio_spec:
   sample_rate: 8000 # sample_rate
   channels: 1
-  sentence_len: 2.0 # seconds max_frames
+  sentence_len: 1.5 # seconds max_frames
   win_len: 0.025
   hop_len: 0.01 # Hop length is the length of the non-intersecting portion of window length
 
@@ -82,7 +82,7 @@ optimizer:
 
 ## callbacks
 callbacks:
-  name: steplr
+  name: reduceOnPlateau
   base_lr: !ref <base_lr>
   max_lr: !ref <max_lr>
   # step_size: !ref <step_size>
@@ -92,9 +92,9 @@ es_patience: 15
 
 ## Using pretrain
 pretrained:
-  use: True
+  use: False
   path: backup/1001/Raw_ECAPA/ARmSoftmax/model/best_state_top4.pt
-  
+
 ## Augment options
 augment: True
 augment_options:

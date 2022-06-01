@@ -1,3 +1,4 @@
+import math
 import os
 import csv
 import argparse
@@ -57,15 +58,16 @@ class TrainLoader(Dataset):
             else:
                 self.augment_engine = None
                 self.augment = False
-                
+
         # Read Training Files...
         lines = []
         with open(dataset_file_name, 'r', newline='') as rf:
             spamreader = csv.reader(rf, delimiter=',')
             next(spamreader, None)
             for row in spamreader:
-                lines.append(row[:2]) # spkid, path, duration, audio_format take only 'spkid path'
-                
+                # spkid, path, duration, audio_format take only 'spkid path'
+                lines.append(row[:2])
+
         dictkeys = list(set([x[0] for x in lines]))
         dictkeys.sort()
         dictkeys = {key: ii for ii, key in enumerate(dictkeys)}
@@ -266,7 +268,7 @@ class test_data_loader(Dataset):
         self.test_list = test_list
 
     def __getitem__(self, index):
-        audio = loadWAV(self.test_list[index], 
+        audio = loadWAV(self.test_list[index],
                         self.audio_spec,
                         evalmode=True,
                         augment=False,
@@ -337,6 +339,7 @@ if __name__ == '__main__':
 
     for (sample, label) in tqdm(train_loader):
         sample = sample.transpose(0, 1)
+        print(sample.get_device())
         for inp in sample:
             print(inp.size(), inp.reshape(-1, inp.size()[-1]).size())
         print(sample.size(), label.size())
