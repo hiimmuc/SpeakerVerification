@@ -18,8 +18,6 @@ class MSAmSoftmax(nn.Module):
         self.armsoftmax = armsoftmax.ARmSoftmax(**kwargs)
         self.msloss = msloss.MultiSimilarity_v2(**kwargs)
 
-        print('Initialised Multi Similarity V2 Loss')
-
     def forward(self, x, label=None):
         weight = 0.6
         nlossCE, prec1 = self.armsoftmax(x, label)

@@ -20,8 +20,6 @@ class Softmax(nn.Module):
         self.criterion = torch.nn.CrossEntropyLoss()
         self.fc = nn.Linear(nOut, nClasses)
 
-        print('Initialised Softmax Loss')
-
     def forward(self, x, label=None):
 
         x = self.fc(x)

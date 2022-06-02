@@ -23,8 +23,6 @@ class TripletLoss(nn.Module):
         self.hard_prob = hard_prob
         self.margin = margin
 
-        print('Initialised Triplet Loss')
-
     def forward(self, x, label=None):
 
         assert x.size()[1] == 2

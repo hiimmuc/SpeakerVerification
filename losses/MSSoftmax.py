@@ -18,8 +18,6 @@ class MSSofmaxLoss(nn.Module):
         self.softmax = softmax.Softmax(**kwargs)
         self.msloss = msloss.MultiSimilarity(**kwargs)
 
-        print('Initialised Multi Similarity softmax Loss')
-
     def forward(self, x, label=None):
 
         

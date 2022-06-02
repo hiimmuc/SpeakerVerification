@@ -35,7 +35,7 @@ class AAmSoftmax(nn.Module):
         self.th = math.cos(math.pi - self.m)
         self.mm = math.sin(math.pi - self.m) * self.m
 
-        print('Initialised AAMSoftmax margin %.3f scale %.3f' % (self.m, self.s))
+        # print('Initialised AAMSoftmax margin %.3f scale %.3f' % (self.m, self.s))
 
     def forward(self, x, label=None):
         if len(x.shape) == 3:

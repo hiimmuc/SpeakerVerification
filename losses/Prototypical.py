@@ -22,8 +22,6 @@ class Prototypical(nn.Module):
 
         self.criterion = torch.nn.CrossEntropyLoss()
 
-        print('Initialised Prototypical Loss')
-
     def forward(self, x, label=None):
 
         assert x.size()[1] >= 2

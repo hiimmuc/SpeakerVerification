@@ -22,7 +22,6 @@ def binarize_and_smooth_labels(T, nb_classes, smoothing_const = 0.1):
     T = torch.FloatTensor(T).cuda()
     return T
 
-
 class ProxyNCA(torch.nn.Module):
     def __init__(self, 
         n_classes=5994,

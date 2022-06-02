@@ -18,8 +18,6 @@ class AAmSoftmaxProto(nn.Module):
         self.aamsoftmax = aamsoftmax.AAmSoftmax(**kwargs)
         self.angleproto = angleproto.AngularProto(**kwargs)
 
-        print('Initialised SoftmaxPrototypical Loss')
-
     def forward(self, x, label=None):
 
         assert x.size()[1] == 2

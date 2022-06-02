@@ -22,8 +22,6 @@ class AngularProto(nn.Module):
         self.b = nn.Parameter(torch.tensor(init_b))
         self.criterion = torch.nn.CrossEntropyLoss()
 
-        print('Initialised AngleProto')
-
     def forward(self, x, label=None):
 
         assert x.size()[1] >= 2

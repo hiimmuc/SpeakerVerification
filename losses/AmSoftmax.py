@@ -26,8 +26,6 @@ class AmSoftmax(nn.Module):
         self.ce = nn.CrossEntropyLoss()
         nn.init.xavier_normal_(self.W, gain=1)
 
-        print('Initialised AMSoftmax m=%.3f s=%.3f' % (self.m, self.s))
-
     def forward(self, x, label=None):
         if len(x.shape) == 3:
             label = label.repeat_interleave(x.shape[1])

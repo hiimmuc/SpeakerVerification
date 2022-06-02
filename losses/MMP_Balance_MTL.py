@@ -19,8 +19,6 @@ class MMP_Balance_MTL(nn.Module):
         self.amsoftmax = amsoftmax.AmSoftmax(**kwargs)
         self.mmp_balance = mmp_balance.MMP_Balance(**kwargs)
 
-        print('Initialised Softmax Multi Mask Proxy Loss')
-
     def forward(self, x, label=None):
 
         weight = 0.6
