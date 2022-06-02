@@ -339,7 +339,7 @@ if __name__ == '__main__':
 
     for (sample, label) in tqdm(train_loader):
         sample = sample.transpose(0, 1)
-        print(sample.get_device())
+        print(sample.device)
         for inp in sample:
             print(inp.size(), inp.reshape(-1, inp.size()[-1]).size())
         print(sample.size(), label.size())

@@ -36,6 +36,10 @@ warnings.simplefilter("ignore")
 
 
 def main_worker(gpu, nprocs, args):
+    """
+    https://pytorch.org/docs/stable/_modules/torch/multiprocessing/spawn.html#spawn
+    """
+    
     args.gpu = gpu  # if gpu == 0 means the main process
     device = torch.device(
         f'{args.device}:{args.gpu}') if args.device == 'cuda' else torch.device('cpu')
@@ -82,21 +86,17 @@ def main_worker(gpu, nprocs, args):
 
     # NOTE: setup distributed data parallelism training
     if args.distributed:
-        try:
-            os.environ['MASTER_ADDR'] = 'localhost'
-            os.environ['MASTER_PORT'] = args.port
+        setup_DDP(rank=args.gpu,
+                  world_size=ngpus_per_node,
+                  backend=args.distributed_backend,
+                  port=args.port)
 
-            dist.init_process_group(
-                backend=args.distributed_backend,
-                world_size=ngpus_per_node, rank=args.gpu)
+        torch.cuda.set_device(args.gpu)
+        s.cuda(args.gpu)
 
-            torch.cuda.set_device(args.gpu)
-            s.to(device)
+        s = torch.nn.parallel.DistributedDataParallel(
+            s, device_ids=[args.gpu], find_unused_parameters=False)
 
-            s = torch.nn.parallel.DistributedDataParallel(
-                s, device_ids=[args.gpu], find_unused_parameters=False)
-        except:
-            dist.destroy_process_group()
     else:
         s = WrappedModel(s).to(device)
 
@@ -233,7 +233,8 @@ def main_worker(gpu, nprocs, args):
     if args.gpu == 0:
         score_file.close()
         writer.close()
-
+    
+    cleanup_DDP()
     return
 
 #######################################
@@ -271,6 +272,17 @@ def train(args):
         main_worker(0, None, args)
 
     sys.exit(1)
+    
+    
+def setup_DDP(rank, world_size, backend='nccl', address='localhost', port='123455'):
+    os.environ['MASTER_ADDR'] = address
+    os.environ['MASTER_PORT'] = port
+    
+    # initialize the process group
+    dist.init_process_group(backend, rank=rank, world_size=world_size)
+
+def cleanup_DDP():
+    dist.destroy_process_group()
 
 
 def choose_model_state(args, priority='defined'):

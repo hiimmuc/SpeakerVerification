@@ -30,7 +30,7 @@ class WrappedModel(nn.Module):
 
     def forward(self, x, label=None):
         return self.module(x, label)
-
+    
 
 class SpeakerEncoder(nn.Module):    
     def __init__(self, model, criterion, classifier, optimizer, features , device='cuda', gpu=0, include_top=False, ** kwargs) -> None:
@@ -96,9 +96,9 @@ class SpeakerEncoder(nn.Module):
             print(f"- Embedding normalized: ", self.__L__.test_normalize)
         
     def forward(self, data, label=None):
-        # data = data.reshape(-1,data.size()[-1]).to(self.device)
-        data = data.to(self.device)
-        # data size: n_speaker x batch_size x n_samples
+        # data size: n_speaker x bsize x n_samples
+        data = data.reshape(-1, data.size()[-1]).unsqueeze(0).to(self.device) # -> 1 x (n_speaker x batch_size) x n_samples
+        # data = data.to(self.device)
         feat = []
         # forward n utterances per speaker and stack the output
         for inp in data:
@@ -120,7 +120,8 @@ class SpeakerEncoder(nn.Module):
             return feat
         else:
             feat = feat.reshape(self.nPerSpeaker,-1,feat.size()[-1]).transpose(1,0).squeeze(1)
-            nloss, prec1 = self.__L__.forward(feat, label)
+            # feat: batch size x n_spks x emb dim
+            nloss, prec1 = self.__L__.forward(feat, label.to(self.device))
             return nloss, prec1
                 
 
@@ -176,10 +177,12 @@ class ModelHandling(object):
                                                          lr_decay=optimizer['lr_decay'], **dict(kwargs, T_max=self.T_max))
         elif self.callback['name'] == 'reduceOnPlateau':
             Scheduler = importlib.import_module(
-                'callbacks.' + self.callback['name']).__getattribute__('LRScheduler')
+                'callbacks.' + callbacks).__getattribute__('LRScheduler')
             self.__scheduler__ = Scheduler(self.__optimizer__, 
-                                           patience=self.kwargs['step_size'],
-                                           min_lr=self.kwargs['base_lr'], factor=0.95)
+                                           step_size=self.callback['step_size'], 
+                                           lr_decay=optimizer['lr_decay'], 
+                                           patience=self.callback['step_size'], 
+                                           min_lr=self.callback['base_lr'], factor=0.95)
             self.lr_step = 'epoch'
         
         assert self.lr_step in ['epoch', 'iteration']
@@ -199,6 +202,8 @@ class ModelHandling(object):
         '''
         self.__model__.train()
 
+        stepsize = loader.batch_size
+
         counter = 0
         loss = 0
         top1 = 0  # EER or accuracy
@@ -213,7 +218,7 @@ class ModelHandling(object):
             
             self.__model__.zero_grad()
             
-            label = torch.LongTensor(data_label).to(self.device)
+            label = torch.LongTensor(data_label)
             
             if self.mixedprec:
                 with autocast():
@@ -232,22 +237,22 @@ class ModelHandling(object):
 
             # update tqdm bar
             if verbose:
-                loader_bar.set_postfix(LR=f"{round(float(self.__optimizer__.param_groups[0]['lr']), 6)}", 
+                loader_bar.set_postfix(LR=f"{round(float(self.__optimizer__.param_groups[0]['lr']), 8)}", 
                                        TLoss=f"{round(float(loss / counter), 5)}", 
-                                       TAcc=f"{round(float(top1 / counter), 4)}%")
+                                       TAcc=f"{round(float(top1 / counter), 3)}%")
 
             if self.lr_step == 'iteration':
                 self.__scheduler__.step()
 
         # select mode for callbacks
-        if self.lr_step == 'epoch' and self.callback['name'] not in ['reduceOnPlateau', 'auto']:
+        if self.lr_step == 'epoch' and self.callback not in ['reduceOnPlateau', 'auto']:
             self.__scheduler__.step()
 
-        elif self.callback['name'] == 'reduceOnPlateau':
+        elif self.callback == 'reduceOnPlateau':
             # reduce on plateau
             self.__scheduler__(loss / counter)
 
-        elif self.callback['name'] == 'auto':
+        elif self.callback == 'auto':
             if epoch <= 50:
                 self.__scheduler__['rop'](loss / counter)
             else:
@@ -662,12 +667,19 @@ class ModelHandling(object):
     ## ===== ===== ===== ===== ===== ===== ===== =====
 
     def saveParameters(self, path):
+        try:
+            state_dict = self.__model__.module.state_dict()
+        except:
+            state_dict = self.__model__.state_dict()
 
-        torch.save(self.__model__.module.state_dict(), path)
+        torch.save(state_dict, path)
 
     def loadParameters(self, path, show_error=True):
         if os.path.exists(path):
-            self_state = self.__model__.module.state_dict()
+            try:
+                self_state = self.__model__.module.state_dict()
+            except:
+                self_state = self.__model__.state_dict()
             
             loaded_state = torch.load(path, map_location=self.device)
 

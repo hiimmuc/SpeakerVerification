@@ -299,9 +299,6 @@ class DataGenerator():
 
             valid_spks.append(str(Path(classpath)))
             
-            if len(valid_spks) > num_spks:
-                break
-
             random.shuffle(filepaths)
 
             val_num = 3  # 3 utterances per speaker for val
@@ -323,6 +320,10 @@ class DataGenerator():
                 train_filepaths_list.append([spkID, str(train_filepath), duration, ext]) 
                 
             val_filepaths_list.append(val_filepaths)
+            
+            # break when reach numer of maximum spk
+            if len(valid_spks) >= num_spks:
+                break
             
             # set post fix for tqdm
             loader_bar.set_postfix(Valid_speakers=f" {len(valid_spks)} speakers")
