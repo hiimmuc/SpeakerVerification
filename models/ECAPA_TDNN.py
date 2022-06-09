@@ -388,17 +388,23 @@ class ECAPA_TDNN(torch.nn.Module):
     ):
 
         super().__init__()
+        
         assert len(channels) == len(kernel_sizes)
         assert len(channels) == len(dilations)
+        assert input_size == kwargs['n_mels'], "inappropriate input size, should equal feature_dim"
+        
         self.channels = channels
         self.aug = kwargs['augment']
-        self.aug_chain = kwargs['augment_options']['augment_chain']
-        n_mels = kwargs['n_mels']
-        input_size = n_mels
-
+        self.aug_chain = kwargs['augment_options']['augment_chain']        
+        self.kwargs = kwargs
+        
         self.blocks = nn.ModuleList()
 
         self.specaug = SpecAugment()  # Spec augmentation
+        
+        self.instance_norm = nn.InstanceNorm1d(input_size, affine=True, 
+                                               eps=1e-05, momentum=0.1, 
+                                               track_running_stats=False)
 
         # The initial TDNN layer
         self.blocks.append(
@@ -459,13 +465,15 @@ class ECAPA_TDNN(torch.nn.Module):
         # Minimize transpose for efficiency
 
         with torch.no_grad():
-            x = x + 1e-6
-            x = x.log()
-            x = x - torch.mean(x, dim=-1, keepdim=True)
             if self.aug and 'spec_domain' in self.aug_chain:
                 x = self.specaug(x)
+            if self.kwargs['features'] == 'melspectrogram':
+                x = x + 1e-6
+                x = x.log() # this will cause nan value for MFCC features
+                x = x - torch.mean(x, dim=-1, keepdim=True)
+            x = self.instance_norm(x)
 
-        # x shape: batch x n_mels x n_frames of batch x fea x time
+        # x shape: batch x n_mels x n_frames or batch x fea x time
 
         xl = []
         for layer in self.blocks:
