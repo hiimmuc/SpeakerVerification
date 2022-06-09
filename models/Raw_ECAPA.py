@@ -23,7 +23,7 @@ class Raw_ECAPA(nn.Module):
         self.ECAPA_TDNN = ECAPA_TDNN.MainModel(nOut=192, channels= [512, 512, 512, 512, 1536], **kwargs)
         self.rawnet2v2 = RawNet2v2.MainModel(nOut=nOut-192,**kwargs) # if error,change between self.rawmet2v2 and self.rawnet
         
-        features = 'melspectrogram'
+        features = 'mfcc'
         Features_extractor = importlib.import_module(
             'models.FeatureExtraction.feature').__getattribute__(f"{features}")
         self.compute_features = Features_extractor(**kwargs) 
