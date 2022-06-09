@@ -103,7 +103,7 @@ def main_worker(gpu, nprocs, args):
     speaker_model = ModelHandling(s, **dict(vars(args), T_max=max_iter_size))
 
     # Choose weight as pretrained model
-    weight_path, start_lr, init_epoch = choose_model_state(args, priority='defined')
+    weight_path, start_lr, init_epoch = choose_model_state(args, priority='previous')
     if weight_path is not None:
         if args.gpu == 0:
             print("Load model from:", weight_path)

@@ -17,7 +17,7 @@ from torch.cuda.amp import autocast, GradScaler
 
 from processing.audio_loader import loadWAV
 from utils import (similarity_measure, cprint)
-from dataloader import test_data_loader
+from dataloader import test_data_loader, worker_init_fn
 
 
 class WrappedModel(nn.Module):
@@ -66,7 +66,7 @@ class SpeakerEncoder(nn.Module):
                 
         SpeakerNetModel = importlib.import_module(
             'models.' + self.model['name']).__getattribute__('MainModel')
-        self.__S__ = SpeakerNetModel(nOut=self.model['nOut'], **kwargs).to(self.device)
+        self.__S__ = SpeakerNetModel(nOut=self.model['nOut'], features = self.features, **kwargs).to(self.device)
         
         LossFunction = importlib.import_module(
             'losses.' + self.criterion['name']).__getattribute__(f"{self.criterion['name']}")
@@ -330,6 +330,7 @@ class ModelHandling(object):
             batch_size=1,
             shuffle=False,
             num_workers=dataloader_options['num_workers'],
+            worker_init_fn=None,
             drop_last=False,
             sampler=sampler
         )
@@ -338,23 +339,18 @@ class ModelHandling(object):
 
         # Save all features to dictionary
         loader_bar = tqdm(
-            setfiles, desc=">>>>Reading file: ", unit="files", colour="red")
-        for idx, filename in enumerate(loader_bar):
-            audio = loadWAV(filename, 
-                            self.audio_spec,
-                            evalmode=True,
-                            augment=False,
-                            augment_options=[],
-                            num_eval=num_eval,
-                            random_chunk=False)
+            test_loader, desc=">>>>Reading file: ", unit="files", colour="red")
+        ##
+        for idx, src in enumerate(loader_bar):
             
-            inp1 = torch.FloatTensor(audio).unsqueeze(0).to(self.device)                  
-
+            audio, filename = src
+            inp1 = torch.FloatTensor(audio).to(self.device)  
+            
             with torch.no_grad():
                 ref_feat = self.__model__.forward(inp1).detach().cpu()
                                 
-            feats[filename] = ref_feat
-
+            feats[str(Path(str(filename[0])))] = ref_feat       
+        #
         all_scores = []
         all_labels = []
         all_trials = []
@@ -519,7 +515,6 @@ class ModelHandling(object):
                 save_path=None,
                 prepare_type='cohorts',
                 num_eval=10,
-                eval_frames=100,
                 source=None, **kwargs):     
                        
         """ Prepared 1 of the 2:
@@ -556,7 +551,7 @@ class ModelHandling(object):
                 
             for spkID, paths in tqdm(cohort_spk_files.items(), unit=' speakers', desc='Getting speaker embedding'):
                 for path in paths[:n_emb_per_spk]:
-                    emb = self.embed_utterance(path, eval_frames=eval_frames, num_eval=num_eval, normalize=True)
+                    emb = self.embed_utterance(path, num_eval=num_eval, normalize=True)
                     cohort_embedding.setdefault(spkID, []).append(emb)
 
             cohort_speakers = list(cohort_embedding.keys())
@@ -584,9 +579,8 @@ class ModelHandling(object):
                     for f in files:
                         embed = self.embed_utterance(
                             f,
-                            eval_frames=eval_frames,
                             num_eval=num_eval,
-                            normalize=self.__model__.test_normalize)
+                            normalize=self.__model__.module.test_normalize)
                         if mean_embed is None:
                             mean_embed = embed.unsqueeze(0)
                         else:
@@ -610,11 +604,9 @@ class ModelHandling(object):
                 mean_embed = None
                 embed = None
                 for audio_data_np in source:
-                    embed = self.embed_utterance(audio_data_np, 
-                                                 eval_frames=eval_frames, 
+                    embed = self.embed_utterance(audio_data_np,  
                                                  num_eval=num_eval,
-                                                 normalize=self.__model__.test_normalize,
-                                                 sr=8000)
+                                                 normalize=self.__model__.module.test_normalize)
                     if mean_embed is None:
                         mean_embed = embed.unsqueeze(0)
                     else:
@@ -633,26 +625,26 @@ class ModelHandling(object):
     ## ===== ===== ===== ===== ===== ===== ===== =====
     def embed_utterance(self,
                         source,
-                        eval_frames=0,
-                        num_eval=10,
-                        normalize=False, sr=None):
+                        num_eval=20,
+                        normalize=False):
         """_summary_
 
         Args:
             source (_type_): _description_
-            eval_frames (int, optional): _description_. Defaults to 0.
             num_eval (int, optional): _description_. Defaults to 10.
             normalize (bool, optional): _description_. Defaults to False.
-            sr (_type_, optional): _description_. Defaults to None.
-
+ 
         Returns:
             _type_: _description_
         """
+
         audio = loadWAV(source,
-                        eval_frames,
+                        self.audio_spec,
                         evalmode=True,
+                        augment=False,
+                        augment_options=[],
                         num_eval=num_eval,
-                        sr=sr)
+                        random_chunk=False)
 
         inp = torch.FloatTensor(audio).to(self.device)
                     

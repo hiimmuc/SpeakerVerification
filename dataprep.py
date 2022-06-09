@@ -153,8 +153,8 @@ def augmentation(args, audio_paths, mode='train', max_frames=200, step_save=5, *
     prepare_augmentation(args)  # check if augumentation data is ready
 
     aug_rate = args.aug_rate
-#     musan_path = str(os.path.join(args.augment_path, '/musan_split'))
-#     rir_path = str(os.path.join(args.augment_path, '/RIRS_NOISES/simulated_rirs'))
+    # musan_path = str(os.path.join(args.augment_path, '/musan_split'))
+    # rir_path = str(os.path.join(args.augment_path, '/RIRS_NOISES/simulated_rirs'))
     musan_path = "dataset/augment_data/musan_split"
     rir_path = "dataset/augment_data/RIRS_NOISES/simulated_rirs"
     print('Start augmenting data with', musan_path, 'and', rir_path)

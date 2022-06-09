@@ -3,27 +3,38 @@ import os
 import csv
 import argparse
 import time
+import random
 
 import numpy as np
-from sklearn.utils import shuffle
 
 import torch
 from torch.utils.data import DataLoader, Dataset
 import torch.distributed as dist
 
 from processing.audio_loader import loadWAV, AugmentWAV
-from utils import round_down, worker_init_fn
 from utils import read_config
 from pathlib import Path
 from tqdm.auto import tqdm
 
 
 def round_down(num, divisor):
+    """
+    To reduce number of iteration due to the increase of number of subcenters
+    """
     return num - (num % divisor)
 
+# def worker_init_fn(worker_id):
+#     np.random.seed(np.random.get_state()[1][0] + worker_id)
 
 def worker_init_fn(worker_id):
-    np.random.seed(np.random.get_state()[1][0] + worker_id)
+    """
+    Create the init fn for worker id
+    """
+    torch_seed = torch.initial_seed()
+    random.seed(torch_seed + worker_id)
+    if torch_seed >= 2**30:  # make sure torch_seed + workder_id < 2**32
+        torch_seed = torch_seed % (2**30)
+    np.random.seed(torch_seed + worker_id)    
 
 
 class TrainLoader(Dataset):

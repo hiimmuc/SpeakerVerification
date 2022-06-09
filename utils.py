@@ -57,13 +57,17 @@ class PreEmphasis(torch.nn.Module):
         assert len(input.size(
         )) == 2, f'The number of dimensions of input tensor must be 2, got {input.size()}'
         # reflect padding to match lengths of in/out
-        inp_device = input.get_device()
-        model_device = self.flipped_filter.get_device()
-        input = input.unsqueeze(1).to(model_device)
+        # inp_device = input.get_device()
+        # model_device = self.flipped_filter.get_device()
+        # input = input.unsqueeze(1).to(model_device)
+        # input = F.pad(input, (1, 0), 'reflect')
+        # output = F.conv1d(input, self.flipped_filter).squeeze(1)
+        # return output.to(inp_device)
+        input = input.unsqueeze(1)
         input = F.pad(input, (1, 0), 'reflect')
         output = F.conv1d(input, self.flipped_filter).squeeze(1)
-        return output.to(inp_device)
-
+        return output
+    
 
 def tuneThresholdfromScore(scores, labels, target_fa, target_fr=None):
     results = {}
@@ -200,14 +204,6 @@ def read_log_file(log_file):
         data = rf.readline().strip().replace('\n', '').split(',')
         data = [float(d.split(':')[-1]) for d in data]
     return data
-
-
-def round_down(num, divisor):
-    return num - (num % divisor)
-
-
-def worker_init_fn(worker_id):
-    np.random.seed(np.random.get_state()[1][0] + worker_id)
 
 # ---------------------------------------
 
@@ -361,7 +357,7 @@ def plot_from_file(result_save_path, show=False):
     last_epoch = 1
     step = 10
     for line in line_data:
-        if 'IT' in line[0]:
+        if 'epoch' in line[0]:
             epoch = int(line[0].split(' ')[-1])
 
             if epoch not in range(last_epoch - step, last_epoch + 2):
@@ -393,7 +389,7 @@ def plot_from_file(result_save_path, show=False):
                          for line in val_line_data]
 
         for line in val_line_data:
-            if 'IT' in line[0]:
+            if 'epoch' in line[0]:
                 epoch = int(line[0].split(' ')[-1])
 
                 if epoch not in range(last_epoch - step, last_epoch + step + 1):

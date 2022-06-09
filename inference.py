@@ -130,7 +130,7 @@ def inference(args):
              f"Best sum rate {best_sum_rate} at {best_tfa}\n",
              f" EER {result['roc'][1]}%  min-DCF {mindcf:.5f} at threshold {result['roc'][-1]}\nAUC {result['roc'][2]}\n",
              f"Gmean result:\n",
-             f"EER: {(1 - result['gmean'][1]) * 100}% at threshold {result['gmean'][2]}\n>>> ACC: {result['gmean'][1] * 100}%\n=================>\n"])
+             f" EER: {(1 - result['gmean'][1]) * 100}% at threshold {result['gmean'][2]}\n>>> ACC: {result['gmean'][1] * 100}%\n=================>\n"])
         score_file.close()
 
         # write to file
@@ -175,15 +175,16 @@ def inference(args):
         if copy_name:
             keep_file = str(
                 input(f"Keep this version? '{copy_name}' (Y/N): ")).lower()
-            if keep_file.strip() == 'n':
+            if keep_file.strip().lower() == 'n':
                 subprocess.call(f"rm {copy_name}", shell=True)
                 print("removed copy file...")
-        print("=============END===============//\n")
+        print("\n=============END===============//\n")
         sys.exit(1)
 
     # Test from list (audio1,audio2) and compare to truth file
     if args.test is True:
         if threshold_set == 0:
+            print("Threshold is undefined, run evaluation first...")
             sc, lab, trials = speaker_model.evaluateFromList(
                 listfilename=args.evaluation_file,
                 distributed=args.distributed,
@@ -197,11 +198,9 @@ def inference(args):
             result = tuneThresholdfromScore(sc, lab, target_fa)
             ####
 
-            # print('tfa [thre, fpr, fnr]')
             best_sum_rate = 999
             best_tfa = None
             for i, tfa in enumerate(target_fa):
-                # print(tfa, result[0][i])
                 sum_rate = result['roc'][0][i][1] + result['roc'][0][i][2]
                 if sum_rate < best_sum_rate:
                     best_sum_rate = sum_rate
@@ -212,7 +211,7 @@ def inference(args):
                   f">> EER {result['roc'][1]}% at threshold {result['roc'][-1]}\n",
                   f">> Gmean result: \n>>> EER: {(1 - result['gmean'][1]) * 100}% at threshold {result['gmean'][2]}\n>>> ACC: {result['gmean'][1] * 100}%\n",
                   f">> F-score {result['prec_recall'][2]}% at threshold {result['prec_recall'][-1]}\n")
-            threshold_set =  result['roc'][-1]
+            threshold_set =  result['gmean'][-1]
             
         speaker_model.testFromList(args.verification_file,
                                    thresh_score=threshold_set,
@@ -322,7 +321,7 @@ def inference(args):
 def evaluate_result(path="backup/Raw_ECAPA/result/private_test_results.txt",
                     ref="log_service/test_lst_truth.txt"):
     com = path
-    assert os.path.isfile(ref) and os.path.isfile(com), "Files not exists"
+    assert os.path.isfile(ref) and os.path.isfile(com), f"Files not exists {ref} or {com}"
 
     ref_data = {}
     com_data = {}
