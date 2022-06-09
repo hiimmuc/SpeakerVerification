@@ -34,114 +34,44 @@ Pretrained models and corresponding cohorts can be downloaded from [here](https:
 
 then add the device="cuda:5" to args
 <br/>
-**Phase 1**: Train with classification loss (softmax, amsoftmax, aamsoftmax)
+**Single GPU**
 
 ```python
-!python main.py --do_train \
-                --train_list dataset/train.txt \
-                --test_list dataset/val.txt \
-                --model ResNetSE34V2 \
-                --max_epoch 500 \
-                --batch_size 128 \
-                --nDataLoaderThread 2 \
-                --criterion amsoftmax \
-                --margin 0.1\
-                --scale 30\
-                --nPerSpeaker 1 \
-                --initial_model checkpoints/baseline_v2_ap.model
+!CUDA_VISIBLE_DEVICES=0 python main.py --do_train --config yaml/configuration.yaml
 ```
 
-**Phase 2**: Train with metric loss (angle, proto, angleproto, triplet, metric)
-
+**Data parallel**
 ```python
-!python main.py --do_train \
-                --train_list dataset/train.txt \
-                --test_list dataset/val.txt \
-                --model ResNetSE34V2 \
-                --max_epoch 600 \
-                --batch_size 128 \
-                --nDataLoaderThread 2 \
-                --criterion angleproto \
-                --nPerSpeaker 2
+!CUDA_VISIBLE_DEVICES=6,7,0 python main.py --do_train --config yaml/configuration.yaml --data_parallel
 ```
 
-**Or**, train with combined loss(softmaxproto, amsoftmaxproto)
+**Distributed**
 
 ```python
-!python main.py --do_train \
-                --train_list dataset/train.txt \
-                --test_list dataset/val.txt \
-                --model ResNetSE34V2 \
-                --max_epoch 500 \
-                --batch_size 128 \
-                --nDataLoaderThread 2 \
-                --criterion softmaxproto \
-                --nPerSpeaker 2 \
-                --initial_model checkpoints/baseline_v2_ap.model
+!CUDA_VISIBLE_DEVICES=6,7,0 python main.py --do_train --config yaml/configuration.yaml --distributed --mixedprec --distributed_backend nccl --port 10001
 ```
 
 Note: the best model is automaticly saved during the training process, if the initial_model is not provided, automaticly load from the best_state weight if possible.
-**OR**
-using config file (.yaml format) <br>
-
-```
-!python main.py --do_train --augment --config config.yaml
-```
+add --augment to train with augment data
 
 ## Inference
 
 1. prepare cohorts
 
 ```python
-!python main.py --do_infer --prepare \
-                --model ResNetSE34V2 \
-                --test_list dataset/val.txt \
-                --cohorts_path checkpoints/cohorts_resnet34v2.npy \
-                --initial_model_infer exp/ResNetSE34V2/model/best_state.model
+!!CUDA_VISIBLE_DEVICES=0 python main.py --do_infer --prepare --config yaml/configuration.yaml
 ```
 
 2. Evaluate and tune thresholds
 
 ```python
-!python main.py --do_infer --eval \
-                --model ResNetSE34V2 \
-                --test_list dataset/val.txt \
-                --cohorts_path checkpoints/cohorts_resnet34v2.npy \
-                --initial_model_infer exp/ResNetSE34V2/model/best_state.model
-```
-
-**OR** <br>
-
-```
-!python main.py --do_infer --eval --config config.yaml
+!CUDA_VISIBLE_DEVICES=0 python main.py --do_infer --eval --config yaml/configuration.yaml
 ```
 
 3. Run on Test set
 
 ```python
-!python main.py --do_infer --test \
-                --model ResNetSE34V2 \
-                --cohorts_path checkpoints/cohorts_resnet34v2.npy \
-                --test_threshold 1.7206447124481201 \
-                --test_path dataset \
-                --initial_model_infer exp/ResNetSE34V2/model/best_state.model
-```
-
-**OR** <br>
-
-```
-!python main.py --do_infer --test --config config.yaml
-```
-
-4. test each pair(to get the predict time of each pair):
-
-```python
-!python main.py --do_infer --test_by_pair \
-                --model ResNetSE34V2 \
-                --cohorts_path checkpoints/cohorts_resnet34v2.npy \
-                --test_threshold 1.7206447124481201 \
-                --test_path dataset \
-                --initial_model_infer exp/ResNetSE34v2/model/best_state.model
+!CUDA_VISIBLE_DEVICES=0 python main.py --do_infer --test --config yaml/configuration.yaml
 ```
 
 ## Citation
