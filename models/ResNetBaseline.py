@@ -135,7 +135,6 @@ class ResNetSE(nn.Module):
                  num_filters,
                  nOut,
                  encoder_type='ASP',
-                 n_mels=80,
                  att_dim=128,
                  **kwargs):
         super(ResNetSE, self).__init__()
@@ -145,7 +144,8 @@ class ResNetSE(nn.Module):
         self.aug_chain = kwargs['augment_options']['augment_chain']
         self.inplanes = num_filters[0]
         self.encoder_type = encoder_type
-        self.n_mels = n_mels
+        self.n_mels = kwargs['n_mels']
+        self.kwargs = kwargs
 
         self.conv1 = nn.Conv2d(1,
                                num_filters[0],
@@ -171,7 +171,7 @@ class ResNetSE(nn.Module):
 
         
         self.specaug = SpecAugment()
-        self.instancenorm = nn.InstanceNorm1d(n_mels)
+        self.instancenorm = nn.InstanceNorm1d(self.n_mels)
         outmap_size = int(self.n_mels / 8)
 
         self.attention = nn.Sequential(
@@ -222,13 +222,11 @@ class ResNetSE(nn.Module):
 
     def forward(self, x):
         with torch.no_grad():
-            x = x + 1e-6
-            x = x.log()   
-            x = x - torch.mean(x, dim=-1, keepdim=True)
-            if self.aug and 'spec_domain' in self.aug_chain:
-                x = self.specaug(x)
-                
-        x = self.instancenorm(x).unsqueeze(1)
+            if self.kwargs['features'] == 'melspectrogram':
+                x = x + 1e-6
+                x = x.log()
+                x = x - torch.mean(x, dim=-1, keepdim=True)
+            x = self.instancenorm(x).unsqueeze(1)
 
         assert len(x.size()) == 4  # batch x channel x n_mels x n_frames
         
