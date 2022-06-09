@@ -63,10 +63,18 @@ class SpeakerEncoder(nn.Module):
             self.compute_features = Features_extractor(**kwargs).to(self.device)
         else:
             self.compute_features = None   
-                
-        SpeakerNetModel = importlib.import_module(
-            'models.' + self.model['name']).__getattribute__('MainModel')
-        self.__S__ = SpeakerNetModel(nOut=self.model['nOut'], features = self.features, **kwargs).to(self.device)
+        
+        if isinstance(self.model['name'], str):
+            SpeakerNetModel = importlib.import_module(
+                'models.' + self.model['name']).__getattribute__('MainModel')
+            self.__S__ = SpeakerNetModel(nOut=self.model['nOut'], features = self.features, **kwargs).to(self.device)
+        else:
+            assert isinstance(self.model['name'], list)
+            del kwargs['features']
+            SpeakerNetModel = importlib.import_module(
+                'models.' + 'Mixed_model').__getattribute__('MainModel')
+            self.__S__ = SpeakerNetModel(
+                model_options=self.model,**kwargs).to(self.device)
         
         LossFunction = importlib.import_module(
             'losses.' + self.criterion['name']).__getattribute__(f"{self.criterion['name']}")

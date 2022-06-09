@@ -57,8 +57,13 @@ lib: nnaudio
 
 ## Model definition
 model:
-  name: Raw_ECAPA
-  nOut: 512 #lin neurons
+  name: [RawNet2v2, ECAPA_TDNN]
+  feature_type: [raw, mfcc]
+  nOut: [320, 192] #lin neurons
+# model:
+#   name: ECAPA_TDNN
+#   feature_type: mfcc
+#   nOut: 192 #lin neurons
 
 classifier:
   input_size: !ref <model[nOut]>
