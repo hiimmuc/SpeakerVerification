@@ -3,7 +3,7 @@ import os
 import random
 
 import numpy as np
-
+import torchaudio
 import soundfile as sf
 from pydub import AudioSegment
 
@@ -11,7 +11,7 @@ from scipy import signal
 
 from .augment import (random_augment_speed, random_augment_pitch_shift,
                       random_augment_volume, gain_target_amplitude)
-from .wav_conversion import segment_to_np, np_to_segment
+from .wav_conversion import segment_to_np, np_to_segment, normalize_audio_amp
 from pathlib import Path
 
 
@@ -80,11 +80,11 @@ def loadWAV(audio_source, audio_spec,
             sr = int(audio_seg.frame_rate)
 
             assert set_sample_rate == sr, f"Sample rate is not same as desired value {set_sample_rate} and {sr}"
-
+            
             # normalize rms value of DB to target_db if specified
             if target_db is not None:
                 audio_seg = gain_target_amplitude(audio_seg, target_db)
-
+            
             # perform time donmain augmentation
             if augment and ('time_domain' in augment_options['augment_chain']):
                 audio_seg = random_augment_audio(
@@ -94,23 +94,23 @@ def loadWAV(audio_source, audio_spec,
             audio = segment_to_np(audio_seg, normalize=True)
 
     elif isinstance(audio_source, np.ndarray):
-        audio = audio_source
+        audio = normalize_audio_amp(audio_source)
     else:
         raise "Invalid format of audio source, available: str, ndarray"
 
+    
     if load_all:
         return np.expand_dims(audio, 0)
     else:
         audiosize = audio.shape[0]
-
+        
         # Maximum audio length counted in frames
-        # winlength 25ms, and hop 10ms with sr = 8000 -> hoplen = 80 winlen = 200
+        # winlength 25ms, and hop 10ms with sr = 8000 -> hoplen = 80 winlen = 200 
         # total length  = (winlength- hop_length) + max_frames * hop_length
 
         n_hop_frames = int(audio_spec['hop_len'] * set_sample_rate)
         n_win_frames = int(audio_spec['win_len'] * set_sample_rate)
-        # max_audio = int(max_frames * n_hop_frames + n_overlap_frames)
-        max_audio = int(audio_spec['sentence_len'] * set_sample_rate)
+        max_audio = int(audio_spec['sentence_len'] * set_sample_rate) # max_audio = int(max_frames * n_hop_frames + n_overlap_frames)
 
         n_overlap_frames = n_win_frames - n_hop_frames
         max_frames = round((max_audio - n_overlap_frames) / n_hop_frames)
@@ -120,8 +120,8 @@ def loadWAV(audio_source, audio_spec,
             shortage = max_audio - audiosize + 1
             audio = np.pad(audio, (0, shortage), 'wrap')
             audiosize = audio.shape[0]
-
-        # get start index
+        
+        ## get start index
         if evalmode:
             # get num_eval of audio and stack together
             startframe = np.linspace(0, audiosize - max_audio, num=num_eval)
@@ -132,7 +132,7 @@ def loadWAV(audio_source, audio_spec,
                     [np.int64(random.random() * (audiosize - max_audio))])
             else:
                 startframe = np.array([0])
-
+                
         feats = []
         if evalmode and num_eval == 0:
             feats.append(audio)
@@ -177,13 +177,14 @@ class AugmentWAV(object):
 
         print("Augment set information...")
         # dataset/augment_data/musan_split/ + noise/free-sound/noise-free-sound-0000.wav
+        # dataset/augment_data/musan_split/ + music/fma/music-fma-0003.wav
         musan_noise_files = glob.glob(
             os.path.join(self.musan_path, '*/*/*/*.wav'))
 
         print(f"Using {len(musan_noise_files)} files of MUSAN noise")
 
         for file in musan_noise_files:
-            # file.split('/')[-4] in [noise, speech, music]
+            assert file.split('/')[-4] in ['noise', 'speech', 'music']
             self.noiselist.setdefault(file.split('/')[-4], []).append(file)
 
         # custom noise use additive noise latter
