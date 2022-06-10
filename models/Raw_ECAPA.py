@@ -3,10 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import importlib
 
-from models import ECAPA_TDNN, RawNet2v2
-
-torch.backends.cudnn.benchmark = False
-torch.backends.cudnn.deterministic = False
+from models import ECAPA_TDNN, RawNet2_custom
 
 
 class Raw_ECAPA(nn.Module):
@@ -21,9 +18,11 @@ class Raw_ECAPA(nn.Module):
     def __init__(self, nOut=512, **kwargs):
         super(Raw_ECAPA, self).__init__()
         self.ECAPA_TDNN = ECAPA_TDNN.MainModel(nOut=192, channels= [512, 512, 512, 512, 1536], **kwargs)
-        self.rawnet2v2 = RawNet2v2.MainModel(nOut=nOut-192,**kwargs) # if error,change between self.rawmet2v2 and self.rawnet
+        self.rawnet2v2 = RawNet2_custom.MainModel(nOut=nOut-192,
+                                                  front_proc='sinc',  aggregate='asp',
+                                                  att_dim=128, **kwargs)
         
-        features = 'mfcc'
+        features = 'melspectrogram'
         Features_extractor = importlib.import_module(
             'models.FeatureExtraction.feature').__getattribute__(f"{features}")
         self.compute_features = Features_extractor(**kwargs) 
