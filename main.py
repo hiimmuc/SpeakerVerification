@@ -9,21 +9,23 @@ from utils import read_config
 
 
 def main(args):
+    try:
+        if args.do_train:
+            # TODO: train model
+            train(args)
 
-    if args.do_train:
-        # TODO: train model
-        train(args)
+        elif args.do_infer:
+            # TODO: evaluate model
+            inference(args)
 
-    elif args.do_infer:
-        # TODO: evaluate model
-        inference(args)
+        elif args.do_export:
+            export_model(args, check=True)
 
-    elif args.do_export:
-        export_model(args, check=True)
-
-    else:
-        raise 'Wrong main mode, available: do_train, do_infer, do_export'
-
+        else:
+            raise 'Wrong main mode, available: do_train, do_infer, do_export'
+    except KeyboardInterrupt: 
+        os.system("kill $(ps aux | grep 'main.py' | grep -v grep | awk '{print $2}')")
+        sys.exit(1)
 
 
 #--------------------------------------------------------------------------------------#
@@ -134,7 +136,8 @@ if __name__ == '__main__':
 
     # Run
     n_gpus = torch.cuda.device_count()
-
+    
+    print('Seed:', args.seed)
     print('Python Version:', sys.version)
     print('PyTorch Version:', torch.__version__)
     print('Number of GPUs:', torch.cuda.device_count())

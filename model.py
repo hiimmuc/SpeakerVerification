@@ -50,8 +50,10 @@ class SpeakerEncoder(nn.Module):
         self.criterion = criterion
         self.classifier = classifier
         self.optimizer = optimizer
+        
         self.gpu = gpu
         self.device = torch.device(f'{device}:{self.gpu}')
+        
         self.n_mels = kwargs['n_mels']
         self.augment = kwargs['augment']
         self.augment_chain = kwargs['augment_options']['augment_chain']
@@ -84,7 +86,13 @@ class SpeakerEncoder(nn.Module):
                                   scale=self.criterion['scale'],
                                   **kwargs)
         #NOTE: nClasses is defined
-        self.test_normalize = self.__L__.test_normalize
+        try:
+            self.test_normalize = self.__L__.test_normalize
+            self.train_normalize = self.__L__.train_normalize
+        except AttributeError:
+            # not include in the loss init params
+            self.test_normalize = False
+            self.train_normalize = False
         
         self.nPerSpeaker = kwargs['dataloader_options']['nPerSpeaker']
         
@@ -101,7 +109,7 @@ class SpeakerEncoder(nn.Module):
             print("Model information:")
             print(f"- Initialized model: {self.model['name']} - {nb_params:,} params")
             print(f"- Using loss function: {self.criterion['name']}")
-            print(f"- Embedding normalized: ", self.__L__.test_normalize)
+            print(f"- Embedding normalized: ", self.test_normalize)
         
     def forward(self, data, label=None):
         # data size: n_speaker x bsize x n_samples
@@ -112,17 +120,22 @@ class SpeakerEncoder(nn.Module):
         for inp in data:
             if self.features != 'raw':
                 inp = self.compute_features(inp.to(self.device)) # convert raw audio to mel
-            output = self.__S__.forward(inp.to(self.device))
+                
+            # output = self.__S__.forward(inp.to(self.device))
+            
+            ## Beta for the recognition task
+            if self.include_top:
+                output = self.fc(self.__S__.forward(inp.to(self.device)))
+            else:
+                output = self.__S__.forward(inp.to(self.device))
+            
+            if self.train_normalize:
+                output = F.normalize(output, p=2, dim=1)
+                
             feat.append(output)
 
         feat = torch.stack(feat, dim=1).squeeze()
                 
-        ## Beta for the recognition task
-        # if self.include_top:
-        #     feat = self.fc(self.__S__.forward(data))
-        # else:
-        #     feat = self.__S__.forward(data)
-
         ## Calculate loss
         if label == None:
             return feat
@@ -240,7 +253,7 @@ class ModelHandling(object):
                 self.__optimizer__.step()
 
             loss += nloss.detach().cpu().item()
-            top1 += prec1.detach().cpu().item()
+            top1 += prec1
             counter += 1
 
             # update tqdm bar

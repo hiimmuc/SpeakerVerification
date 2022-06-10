@@ -233,9 +233,9 @@ def main_worker(gpu, nprocs, args):
     if args.gpu == 0:
         score_file.close()
         writer.close()
-    
-    cleanup_DDP()
-    return
+    if args.distributed: 
+        cleanup_DDP()
+    sys.exit(1)
 
 #######################################
 # main fucntion
@@ -258,18 +258,26 @@ def train(args):
     # Main run
     print("Data Parallelism training:", args.data_parallel)
     print("Distributed Data Parallelism:", args.distributed)
-
     try:
-        if args.distributed:
-            npugs = torch.cuda.device_count()
-            mp.spawn(main_worker, nprocs=npugs, args=(npugs, args))
-        else:
+        try:
+            if args.distributed:
+                npugs = torch.cuda.device_count()
+                mp.spawn(main_worker, nprocs=npugs, args=(npugs, args))
+            else:
+                main_worker(0, None, args)
+                
+        except Exception as e:
+            print(f"Got error: {e} -> try to turn to single-GPU training")
+            args.distributed = False
+            args.data_parallel = False
             main_worker(0, None, args)
-    except Exception as e:
-        print(f"Got error: {e} -> try to turn to single-GPU training")
-        args.distributed = False
-        args.data_parallel = False
-        main_worker(0, None, args)
+            
+    except KeyboardInterrupt:
+        print('Interrupted')
+        try: 
+            dist.destroy_process_group()  
+        except KeyboardInterrupt: 
+            os.system("kill $(ps aux | grep multiprocessing.spawn | grep -v grep | awk '{print $2}')")
 
     sys.exit(1)
     
@@ -277,6 +285,7 @@ def train(args):
 def setup_DDP(rank, world_size, backend='nccl', address='localhost', port='123455'):
     os.environ['MASTER_ADDR'] = address
     os.environ['MASTER_PORT'] = port
+    os.environ["TORCH_DISTRIBUTED_DEBUG"] = "DETAIL"  # set to DETAIL for runtime logging.
     
     # initialize the process group
     dist.init_process_group(backend, rank=rank, world_size=world_size)
@@ -323,7 +332,7 @@ def choose_model_state(args, priority='defined'):
         epoch = 1
         args.lr = start_lr
 
-    elif prev_model_state and priority== 'previous':
+    elif args.pretrained['use'] and prev_model_state and priority== 'previous':
         choosen_state = prev_model_state
         args.lr = start_lr
         epoch = start_it
