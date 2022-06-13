@@ -264,7 +264,7 @@ class ModelHandling(object):
                 self.__scheduler__.step()
 
         # select mode for callbacks
-        if self.lr_step == 'epoch' and self.callback not in ['reduceOnPlateau', 'auto']:
+        if self.lr_step == 'epoch' and self.callback['name'] not in ['reduceOnPlateau', 'auto']:
             self.__scheduler__.step()
 
         elif self.callback == 'reduceOnPlateau':
