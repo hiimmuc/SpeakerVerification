@@ -103,10 +103,10 @@ def split_musan(args):
     Split MUSAN for faster random access
     """
 
-    files = glob.glob('%s/musan/*/*/*.wav' % args.augment_path)
+    files = glob.glob('%s/musan/*/*/*.wav' % args.noise_folder)
 
-    audlen = 16000 * 5
-    audstr = 16000 * 3
+    audlen = 8000 * 5
+    audstr = 8000 * 3
 
     for idx, file in enumerate(files):
         fs, aud = wavfile.read(file)

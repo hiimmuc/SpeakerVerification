@@ -39,11 +39,11 @@ def main_worker(gpu, nprocs, args):
     """
     https://pytorch.org/docs/stable/_modules/torch/multiprocessing/spawn.html#spawn
     """
-    
+
     args.gpu = gpu  # if gpu == 0 means the main process
     device = torch.device(
         f'{args.device}:{args.gpu}') if args.device == 'cuda' else torch.device('cpu')
-    ngpus_per_node = torch.cuda.device_count()
+    ngpus_per_node = nprocs
     print("Use GPU cuda:{} for training".format(args.gpu))
 
     # paths
@@ -67,7 +67,8 @@ def main_worker(gpu, nprocs, args):
     args.dataloader_options['num_workers'] = int(
         args.dataloader_options['num_workers'] / ngpus_per_node)
     train_loader = train_data_loader(args)
-    max_iter_size = len(train_loader) // (args.dataloader_options['nPerSpeaker'] * ngpus_per_node) 
+    max_iter_size = len(
+        train_loader) // (args.dataloader_options['nPerSpeaker'] * ngpus_per_node)
 
     # define net
     s = SpeakerEncoder(**vars(args))
@@ -103,7 +104,8 @@ def main_worker(gpu, nprocs, args):
     speaker_model = ModelHandling(s, **dict(vars(args), T_max=max_iter_size))
 
     # Choose weight as pretrained model
-    weight_path, start_lr, init_epoch = choose_model_state(args, priority='previous')
+    weight_path, start_lr, init_epoch = choose_model_state(
+        args, priority='previous')
     if weight_path is not None:
         if args.gpu == 0:
             print("Load model from:", weight_path)
@@ -219,7 +221,7 @@ def main_worker(gpu, nprocs, args):
                     # save every N mins and keep only top 3
                     current_time = str(time.strftime("%Y%m%d_%H_%M"))
                     ckpt_list = glob.glob(os.path.join(
-                        args.model_save_path , '/ckpt_*'))
+                        args.model_save_path, '/ckpt_*'))
                     if len(ckpt_list) == 3:
                         ckpt_list.sort()
                         subprocess.call(f'rm -f {ckpt_list[-1]}', shell=True)
@@ -233,7 +235,7 @@ def main_worker(gpu, nprocs, args):
     if args.gpu == 0:
         score_file.close()
         writer.close()
-    if args.distributed: 
+    if args.distributed:
         cleanup_DDP()
     sys.exit(1)
 
@@ -245,7 +247,7 @@ def main_worker(gpu, nprocs, args):
 def train(args):
     # For REPRODUCIBILITY purpose
     torch.backends.cudnn.benchmark = True
-    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.deterministic = False
 
     # Training params saved
     with open(os.path.join(args.save_folder, f"{args.model['name']}/{args.criterion['name']}/result/settings.txt"), 'a+') as settings_file:
@@ -260,35 +262,38 @@ def train(args):
     print("Distributed Data Parallelism:", args.distributed)
     try:
         try:
+            npugs = torch.cuda.device_count()
             if args.distributed:
-                npugs = torch.cuda.device_count()
                 mp.spawn(main_worker, nprocs=npugs, args=(npugs, args))
             else:
-                main_worker(0, None, args)
-                
+                main_worker(0, npugs, args)
+
         except Exception as e:
             print(f"Got error: {e} -> try to turn to single-GPU training")
             args.distributed = False
             args.data_parallel = False
-            main_worker(0, None, args)
-            
+            main_worker(0, torch.cuda.device_count(), args)
+
     except KeyboardInterrupt:
         print('Interrupted')
-        try: 
-            dist.destroy_process_group()  
-        except KeyboardInterrupt: 
-            os.system("kill $(ps aux | grep multiprocessing.spawn | grep -v grep | awk '{print $2}')")
+        try:
+            dist.destroy_process_group()
+        except KeyboardInterrupt:
+            os.system(
+                "kill $(ps aux | grep multiprocessing.spawn | grep -v grep | awk '{print $2}')")
 
     sys.exit(1)
-    
-    
+
+
 def setup_DDP(rank, world_size, backend='nccl', address='localhost', port='123455'):
     os.environ['MASTER_ADDR'] = address
     os.environ['MASTER_PORT'] = port
-    os.environ["TORCH_DISTRIBUTED_DEBUG"] = "DETAIL"  # set to DETAIL for runtime logging.
-    
+    # set to DETAIL for runtime logging.
+    os.environ["TORCH_DISTRIBUTED_DEBUG"] = "DETAIL"
+
     # initialize the process group
     dist.init_process_group(backend, rank=rank, world_size=world_size)
+
 
 def cleanup_DDP():
     dist.destroy_process_group()
@@ -332,11 +337,11 @@ def choose_model_state(args, priority='defined'):
         epoch = 1
         args.lr = start_lr
 
-    elif args.pretrained['use'] and prev_model_state and priority== 'previous':
+    elif args.pretrained['use'] and prev_model_state and priority == 'previous':
         choosen_state = prev_model_state
         args.lr = start_lr
         epoch = start_it
-        
+
     else:
         epoch = 1
         start_lr = args.lr

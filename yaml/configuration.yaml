@@ -14,7 +14,7 @@ valid_annotation: !ref <save_folder>/metadata/dev.csv
 #
 evaluation_file: dataset/test_data/test_callbot_raw/test_cb_v1_changepath.txt
 verification_file: log_service/check_log_combine/equitable_test.txt
-noise_folder: dataset/augment_data
+noise_folder: dataset/augment_data/8kHz
 
 ckpt_interval_minutes: 30 # save checkpoint every N min, -1 to turn off
 save_model_last: True
@@ -36,7 +36,7 @@ nClasses: 400 # 1211 for vox1  # 5994 for vox2, 7205 for vox1+vox2
 dataloader_options:
   batch_size: !ref <batch_size>
   shuffle: !ref <shuffle>
-  num_workers: 4
+  num_workers: 8
   max_seg_per_spk: 500
   nPerSpeaker: 2
   split_ratio: -1
@@ -56,14 +56,14 @@ features: raw
 lib: nnaudio
 
 ## Model definition
-model:
-  name: [RawNet2v2, ECAPA_TDNN]
-  feature_type: [raw, mfcc]
-  nOut: [320, 192] #lin neurons
 # model:
-#   name: ECAPA_TDNN
-#   feature_type: mfcc
-#   nOut: 192 #lin neurons
+#   name: [RawNet2v2, ECAPA_TDNN]
+#   feature_type: [raw, mfcc]
+#   nOut: [320, 192] #lin neurons
+model:
+  name: Raw_ECAPA
+  feature_type: !ref <features>
+  nOut: 512 #lin neurons
 
 classifier:
   input_size: !ref <model[nOut]>
@@ -90,7 +90,7 @@ callbacks:
   name: reduceOnPlateau
   base_lr: !ref <base_lr>
   max_lr: !ref <max_lr>
-  # step_size: !ref <step_size>
+  patience: !ref <step_size>
 
 early_stopping: False
 es_patience: 15

@@ -198,11 +198,9 @@ class ModelHandling(object):
                                                          lr_decay=optimizer['lr_decay'], **dict(kwargs, T_max=self.T_max))
         elif self.callback['name'] == 'reduceOnPlateau':
             Scheduler = importlib.import_module(
-                'callbacks.' + callbacks).__getattribute__('LRScheduler')
-            self.__scheduler__ = Scheduler(self.__optimizer__, 
-                                           step_size=self.callback['step_size'], 
-                                           lr_decay=optimizer['lr_decay'], 
-                                           patience=self.callback['step_size'], 
+                'callbacks.' + self.callback['name']).__getattribute__('LRScheduler')
+            self.__scheduler__ = Scheduler(self.__optimizer__,
+                                           patience=self.kwargs['step_size'], 
                                            min_lr=self.callback['base_lr'], factor=0.95)
             self.lr_step = 'epoch'
         
