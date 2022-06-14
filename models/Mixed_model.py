@@ -59,19 +59,19 @@ class Mixed_model(nn.Module):
         for module in self.modules:
             out_feats.append(module(x))
 
-        out = torch.cat(out_feats, dim=-1).unsqueeze(-1)
-
-        #####
-        # aggregation: attentive statistical pooling
-        #####
+        out = torch.cat(out_feats, dim=-1).unsqueeze(-1) # bs, nOut -> bs, nOut, 1
+        
         out = self.bn_before_agg(out)
-        out = self.lrelu(out)        
-        w = self.attention(out)        
+        
+        out = self.lrelu(out)
+        
+        w = self.attention(out)
+        
         m = torch.sum(out * w, dim=-1)
         s = torch.sqrt(
             (torch.sum((out ** 2) * w, dim=-1) - m ** 2).clamp(min=1e-5))
         out = torch.cat([m, s], dim=1)
-        out = out.view(out.size(0), -1)  
+        out = out.view(out.size(0), -1)       
 
         #####
         # speaker embedding layer
