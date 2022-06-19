@@ -18,7 +18,7 @@ def cosine_annealinglr_cus(optimizer, T_max=10000, lr_min=1e-6, lr=1e-3,  **kwar
     return lr_scheduler, 'iteration'
 
 
-def cosine_annealinglr_pt(optimizer, T_max=10000, eta_min=0, last_epoch=- 1, verbose=False, **kwargs):
+def cosine_annealinglr_pt(optimizer, T_max=10000, eta_min=1e-6, last_epoch=- 1, verbose=False, **kwargs):
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max, eta_min=eta_min, last_epoch=last_epoch, verbose=verbose)
     return lr_scheduler, 'iteration'
