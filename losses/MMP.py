@@ -30,6 +30,9 @@ class MMP(torch.nn.Module):
         self.nb_classes = nClasses
         self.sz_embed = nOut
         self._lambda = lambda_init
+        
+        self.__train_normalize__    = True
+        self.__test_normalize__     = True 
 
     def forward(self, X, T):
 

@@ -18,15 +18,24 @@ def convert_label_to_similarity(normed_feature: Tensor, label: Tensor) -> Tuple[
 
 
 class CircleLoss(nn.Module):
-    def __init__(self, m: float, gamma: float) -> None:
+    def __init__(self, m=0.25, gamma=256, **kwargs) -> None:
         super(CircleLoss, self).__init__()
         self.m = m
         self.gamma = gamma
         self.soft_plus = nn.Softplus()
 
     def forward(self, sp: Tensor, sn: Tensor) -> Tensor:
-        # loss = criterion(*convert_label_to_similarity(features, label))
-        sp, sn = convert_label_to_similarity(sp, sn)
+        print()
+        if len(sp.shape) == 3:
+            sn = sn.repeat_interleave(sp.shape[1])
+            sp = sp.reshape(-1, sp.shape[-1])
+        elif len(sp.shape) == 2:
+            pass
+        else:
+            raise "Invalid shape of input"
+        assert sp.size()[0] == sn.size()[0]
+        
+        sp, sn = convert_label_to_similarity(sp, sn) # loss = criterion(*convert_label_to_similarity(features, label))
 
         ap = torch.clamp_min(- sp.detach() + 1 + self.m, min=0.)
         an = torch.clamp_min(sn.detach() + self.m, min=0.)

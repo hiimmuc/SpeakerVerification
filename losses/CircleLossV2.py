@@ -3,16 +3,23 @@ from torch import nn
 import torch.nn.functional as F
 
 
-class CircleLoss(nn.Module):
+class CircleLossV2(nn.Module):
     def __init__(self, scale=32, margin=0.25, similarity='cos', **kwargs):
-        super(CircleLoss, self).__init__()
+        super(CircleLossV2, self).__init__()
         self.scale = scale
         self.margin = margin
         self.similarity = similarity
 
     def forward(self, feats, labels):
-        assert feats.size(0) == labels.size(0), \
-            f"feats.size(0): {feats.size(0)} is not equal to labels.size(0): {labels.size(0)}"
+        print(feats.shape)
+        if len(feats.shape) == 3:
+            labels = labels.repeat_interleave(feats.shape[1])
+            feats = feats.reshape(-1, feats.shape[-1])
+        elif len(feats.shape) == 2:
+            pass
+        else:
+            raise "Invalid shape of input"
+        assert feats.size()[0] == labels.size()[0]
 
         m = labels.size(0)
         mask = labels.expand(m, m).t().eq(labels.expand(m, m)).float()

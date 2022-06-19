@@ -14,6 +14,7 @@ except:
 class ARmSoftmax(nn.Module):
     def __init__(self, nOut, nClasses, margin=0.1, scale=30, **kwargs):
         super(ARmSoftmax, self).__init__()
+        self.train_normalize = False
         self.test_normalize = True
         self.m = margin
         self.s = scale
