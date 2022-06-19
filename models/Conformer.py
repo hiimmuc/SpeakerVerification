@@ -32,74 +32,32 @@ class Conformer_(torch.nn.Module):
         super().__init__()
 
         self.aug = kwargs['augment']
-        self.aug_chain = kwargs['augment_chain']
-        sample_rate = int(kwargs['sample_rate'])
-        hoplength = int(10e-3 * sample_rate)
-        winlength = int(25e-3 * sample_rate)
-        n_frames = sample_rate//hoplength + 2
-        n_mels = kwargs['n_mels']
-        input_size = n_mels
+        self.aug_chain = kwargs['augment_options']['augment_chain']        
+        self.kwargs = kwargs
         
         self.blocks = nn.ModuleList()
         
-        # we have 2 version of mels here before 0215 is old
-        # check version of model
-        # model saved name: path/domain_date_time_desc.model
-        if 'initial_model_infer' in kwargs:
-            if (kwargs['initial_model_infer'] is not None):
-                if 'best_state' not in kwargs['initial_model_infer']:
-                    version = int(kwargs['initial_model_infer'].split('/')[-1].split('_')[1])
-                    fb_type = 'nnAudio'
-                elif 'best_state' in kwargs['initial_model_infer']:
-                    fb_type = 'nnAudio'
-            else:
-                fb_type = 'torchaudio'
-                version = -1
-                
-        if  fb_type == 'nnAudio' or version >= 215:
-            self.torchfbank = torch.nn.Sequential(
-                PreEmphasis(),
-                features.mel.MelSpectrogram(sr=sample_rate, 
-                                            n_fft=512, 
-                                            win_length=winlength, 
-                                            n_mels=n_mels, 
-                                            hop_length=hoplength, 
-                                            window='hamming', 
-                                            fmin=0.0, fmax=4000,  
-                                            trainable_mel=True, 
-                                            trainable_STFT=True,
-                                            verbose=False)
-            )
-        else:
-            self.torchfbank = torch.nn.Sequential(
-                PreEmphasis(),
-                torchaudio.transforms.MelSpectrogram(sample_rate=sample_rate, 
-                                                     n_fft=512, 
-                                                     win_length=winlength, 
-                                                     hop_length=hoplength,
-                                                     f_min=10, f_max=4000,
-                                                     window_fn=torch.hamming_window, 
-                                                     n_mels=n_mels)
-            )
-
-
         self.specaug = SpecAugment() # Spec augmentation
+        
+        self.instance_norm = nn.InstanceNorm1d(input_size, affine=True, 
+                                               eps=1e-05, momentum=0.1, 
+                                               track_running_stats=False)
 
         # Conformer
         self.conformer_block = Conformer(
-            input_dim = n_mels,
-            encoder_dim = 144,
-            num_attention_heads = 8,
+            input_dim = input_size,
+            encoder_dim = 256,
+            num_attention_heads = 4,
             feed_forward_expansion_factor = 4,
             conv_expansion_factor = 2,
             input_dropout_p = 0.1,
             feed_forward_dropout_p = 0.1,
             attention_dropout_p = 0.1,
             conv_dropout_p = 0.1,
-            conv_kernel_size = 3,
+            conv_kernel_size = 15,
             half_step_residual = True,
             num_classes= lin_neurons,   
-            num_encoder_layers=  16,
+            num_encoder_layers= 6,
         )
         
         # Attentive Statistical Pooling
@@ -127,11 +85,13 @@ class Conformer_(torch.nn.Module):
         # Minimize transpose for efficiency
         
         with torch.no_grad():
-            x = self.torchfbank(x) + 1e-6
-            x = x.log()   
-            x = x - torch.mean(x, dim=-1, keepdim=True)
             if self.aug and 'spec_domain' in self.aug_chain:
                 x = self.specaug(x)
+            if self.kwargs['features'] == 'melspectrogram':
+                x = x + 1e-6
+                x = x.log() # this will cause nan value for MFCC features
+                x = x - torch.mean(x, dim=-1, keepdim=True)
+            x = self.instance_norm(x)
 
         # conformer
         x = x.transpose(1, -1)

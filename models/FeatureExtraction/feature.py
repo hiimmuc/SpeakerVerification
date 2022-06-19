@@ -91,4 +91,7 @@ def melspectrogram(lib = 'nnaudio',
                                                     window_fn=window_fn,
                                                     norm='slaney',
                                                     mel_scale='slaney')
-    return torch.nn.Sequential(PreEmphasis(),feat) if pre_emphasis else feat                  
+    return torch.nn.Sequential(PreEmphasis(),feat) if pre_emphasis else feat
+                                                    
+
+    

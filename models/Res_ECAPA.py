@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from models.SpecAugment.specaugment import SpecAugment
+from models.OnStreamAugment.specaugment import SpecAugment
 from models.ECAPA_TDNN import *
 from models.ResNetBlocks import SEBasicBlock, SEBottleneck
 
@@ -14,17 +14,15 @@ class ResNetSE_no_head(nn.Module):
                  layers,
                  num_filters,
                  nOut,
-                 encoder_type='ASP',
                  n_mels=80,
-                 att_dim=128,
                  **kwargs):
         super(ResNetSE_no_head, self).__init__()
 
-        print('Embedding size is %d, encoder %s.' % (nOut, encoder_type))
-        self.aug = None if 'augment' in kwargs else kwargs['augment']
-        self.aug_chain = None if 'augment_chain' in kwargs else kwargs['augment_chain']
+        self.aug = kwargs['augment']
+        self.aug_chain = kwargs['augment_options']['augment_chain']    
+        self.kwargs = kwargs
+        
         self.inplanes = num_filters[0]
-        self.encoder_type = encoder_type
         self.n_mels = n_mels
 
         self.conv1 = nn.Conv2d(1,
@@ -52,7 +50,10 @@ class ResNetSE_no_head(nn.Module):
         self.bn2 = nn.BatchNorm2d(nOut)
                                
         self.specaug = SpecAugment()
-        self.instancenorm = nn.InstanceNorm1d(n_mels)
+        
+        self.instance_norm = nn.InstanceNorm1d(n_mels, affine=True, 
+                                               eps=1e-05, momentum=0.1, 
+                                               track_running_stats=False)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -85,13 +86,15 @@ class ResNetSE_no_head(nn.Module):
 
     def forward(self, x):
         with torch.no_grad():
-            x = x + 1e-6
-            x = x.log()   
-            x = x - torch.mean(x, dim=-1, keepdim=True)
             if self.aug and 'spec_domain' in self.aug_chain:
                 x = self.specaug(x)
+            if self.kwargs['features'] == 'melspectrogram':
+                x = x + 1e-6
+                x = x.log() # this will cause nan value for MFCC features
+                x = x - torch.mean(x, dim=-1, keepdim=True)
+            x = self.instance_norm(x)
                 
-        x = self.instancenorm(x).unsqueeze(1)
+        x = x.unsqueeze(1)
 
         assert len(x.size()) == 4  # batch x Channels x n_mels x n_frames 
         
@@ -125,26 +128,11 @@ class ECAPA_TDNN_core(torch.nn.Module):
         List of dilations for kernels in each layer.
     lin_neurons : int
         Number of neurons in linear layers.
-    Example
-    -------
-    >>> input_feats = torch.rand([5, 120, 80])
-    >>> compute_embedding = ECAPA_TDNN(80, lin_neurons=192)
-    >>> outputs = compute_embedding(input_feats)
-    >>> outputs.shape
-    speechbrain settings
-    torch.Size([5, 1, 192])
-    channels: [1024, 1024, 1024, 1024, 3072]
-    kernel_sizes: [5, 3, 3, 3, 1]
-    dilations: [1, 2, 3, 4, 1]
-    groups: [1, 1, 1, 1, 1]
-    attention_channels: 128
-    lin_neurons: 192
     """
 
     def __init__(
         self,
         input_size=80,
-        device="cpu",
         lin_neurons=192,
         activation=torch.nn.ReLU,
         channels=[512, 512, 512, 512, 1536],
@@ -223,7 +211,6 @@ class ECAPA_TDNN_core(torch.nn.Module):
         # x shape: batch x n_mels x n_frames of batch x fea x time
         b, c, f, t = x.size()
         x = x.view((b, c * f, t))
-       
         xl = []
 
         for layer in self.blocks:
@@ -236,7 +223,7 @@ class ECAPA_TDNN_core(torch.nn.Module):
         # Multi-layer feature aggregation
         x = torch.cat(xl[1:], dim=1)
         x = self.mfa(x)
-        
+
         # Attentive Statistical Pooling
         x = self.asp(x, lengths=lengths)
         x = self.asp_bn(x)
@@ -244,7 +231,7 @@ class ECAPA_TDNN_core(torch.nn.Module):
         # Final linear transformation
         x = self.fc(x)
         x = x.squeeze()
-       
+
         return x
 
 
@@ -255,7 +242,7 @@ def MainModel(nOut=128, **kwargs):
     n_features = kwargs['n_mels']
     input_size_tdnn = int(num_filters[-1] * n_features * (2 ** (-1 * len(num_filters))))
     
-    ecapa_blocks = ECAPA_TDNN_core(input_size=input_size_tdnn, device="cpu",  
+    ecapa_blocks = ECAPA_TDNN_core(input_size=input_size_tdnn,
                                    lin_neurons=nOut, activation=torch.nn.ReLU,
                                    channels=[512, 512, 512, 512, 1536],        
                                    kernel_sizes=[5, 3, 3, 3, 1],

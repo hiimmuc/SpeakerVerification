@@ -51,11 +51,13 @@ class AFMS(nn.Module):
     [2] AMFS    : https://www.koreascience.or.kr/article/JAKO202029757857763.page
     """
 
-    def __init__(self, nb_dim):
+    def __init__(self, nb_dim, do_add=True, do_mul=True):
         super(AFMS, self).__init__()
         self.alpha = nn.Parameter(torch.ones((nb_dim, 1)))
         self.fc = nn.Linear(nb_dim, nb_dim)
         self.sig = nn.Sigmoid()
+        self.do_add = do_add
+        self.do_mul = do_mul
 
     def forward(self, x):
         y = F.adaptive_avg_pool1d(x, 1).view(x.size(0), -1)
@@ -63,6 +65,11 @@ class AFMS(nn.Module):
 
         x = x + self.alpha
         x = x * y
+        # if self.do_mul:
+        #     x = x * y
+        # if self.do_add:
+        #     x = x + y      
+            
         return x
 
 

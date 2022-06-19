@@ -20,6 +20,47 @@ from typing import Type, Any, Callable, Union, List, Optional
 from enum import Enum
 
 
+from torch.nn.modules.batchnorm import _BatchNorm
+from torch.nn.parameter import Parameter
+
+
+class _BatchAttNorm(_BatchNorm):
+    def __init__(self, num_features, eps=1e-5, momentum=0.1, affine=False):
+        super(_BatchAttNorm, self).__init__(num_features, eps, momentum, affine)
+        self.avg = nn.AdaptiveAvgPool2d((1, 1))
+        self.sigmoid = nn.Sigmoid()
+        self.weight = Parameter(torch.Tensor(1, num_features, 1, 1))
+        self.bias = Parameter(torch.Tensor(1, num_features, 1, 1))
+        self.weight_readjust = Parameter(torch.Tensor(1, num_features, 1, 1))
+        self.bias_readjust = Parameter(torch.Tensor(1, num_features, 1, 1))
+        self.weight_readjust.data.fill_(0)
+        self.bias_readjust.data.fill_(-1)
+        self.weight.data.fill_(1)
+        self.bias.data.fill_(0)
+
+    def forward(self, input):
+        self._check_input_dim(input)
+
+        # Batch norm
+        attention = self.sigmoid(self.avg(input) * self.weight_readjust + self.bias_readjust)
+        bn_w = self.weight * attention
+
+        out_bn = F.batch_norm(
+            input, self.running_mean, self.running_var, None, None,
+            self.training, self.momentum, self.eps)
+        out_bn = out_bn * bn_w + self.bias
+
+        return out_bn
+
+class BAN2d(_BatchAttNorm):
+    '''
+    https://github.com/gbup-group/IEBN/blob/master/models/cifar/iebn_resnet.py
+    '''
+    def _check_input_dim(self, input):
+        if input.dim() != 4:
+            raise ValueError('expected 4D input (got {}D input)'.format(input.dim()))
+
+
 class ChannelSELayer(nn.Module):
     """
     Re-implementation of Squeeze-and-Excitation (SE) block described in:
@@ -133,12 +174,15 @@ class SEBasicBlock(nn.Module):
                  base_width=64, dilation=1, norm_layer=None,
                  *, reduction=16):
         super(SEBasicBlock, self).__init__()
+        
         self.conv1 = conv3x3(inplanes, planes, stride)
         self.bn1 = nn.BatchNorm2d(planes)
         self.relu = nn.ReLU(inplace=True)
+        
         self.conv2 = conv3x3(planes, planes, 1)
         self.bn2 = nn.BatchNorm2d(planes)
         self.se = SELayer(planes, reduction)
+        
         self.downsample = downsample
         self.stride = stride
 
@@ -169,7 +213,7 @@ class SEBasicBlockV2(nn.Module):
     def __init__(self, inplanes, planes, stride=1, downsample=None, groups=1,
                  base_width=64, dilation=1, norm_layer=None,
                  *, reduction=16):
-        super(SEBasicBlock, self).__init__()
+        super(SEBasicBlockV2, self).__init__()
         self.conv1 = conv3x3(inplanes, planes, stride)
         self.bn1 = nn.BatchNorm2d(planes)
         self.relu = nn.ReLU(inplace=True)

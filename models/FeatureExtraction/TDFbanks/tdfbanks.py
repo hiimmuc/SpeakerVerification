@@ -13,8 +13,8 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-import models.FeatureExtraction.TDFbanks.melfilters
-import models.FeatureExtraction.TDFbanks.utils
+from models.FeatureExtraction.TDFbanks import melfilters
+from models.FeatureExtraction.TDFbanks import utils
 
 
 class TDFbanks(nn.Module):

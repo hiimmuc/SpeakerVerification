@@ -12,7 +12,7 @@ from models.ECAPA_utils import Conv1d as _Conv1d
 from models.ECAPA_utils import BatchNorm1d as _BatchNorm1d
 from models.ECAPA_utils import Linear, length_to_mask
 
-from models.SpecAugment.specaugment import SpecAugment
+from models.OnStreamAugment.specaugment import SpecAugment
 
 
 # Skip transpose as much as possible for efficiency

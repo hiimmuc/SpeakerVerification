@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from .ResNetBlocks import *
-from models.SpecAugment.specaugment import SpecAugment
+from models.OnStreamAugment.specaugment import SpecAugment
 
 # baseline for resnet
 

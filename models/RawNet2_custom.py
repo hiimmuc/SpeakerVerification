@@ -24,7 +24,7 @@ class RawNet2(nn.Module):
 
     def __init__(self, block, layers, nb_filters,
                  audio_spec,
-                 front_proc='sinc',  aggregate='sap',
+                 front_proc='sinc',  aggregate='asp',
                  att_dim=128,
                  code_dim=512,
                  in_channels=1,
@@ -37,35 +37,36 @@ class RawNet2(nn.Module):
 
         self.inplanes = nb_filters[0]
         self.log_input = log_input
-
+    
         #####
         # first layers before residual blocks
         #####
         self.front_proc = front_proc
-        self.conv1 = nn.Conv1d(
-            in_channels,
-            nb_filters[0],
-            kernel_size=3,
-            stride=3,
-            padding=0
-        )
-        
-        #  sinc layer
-        sample_rate = audio_spec['sample_rate']
-        hoplength = int(audio_spec['hop_len'] * sample_rate * 1e-3)
-        winlength = int(audio_spec['win_len'] * sample_rate * 1e-3)
-        nb_samp = int(audio_spec['sentence_len'] * sample_rate)
-        
-        self.ln = LayerNorm(nb_samp)
-        self.first_conv = SincConv_fast(in_channels=in_channels,
-                                        out_channels=nb_filters[0],
-                                        kernel_size=first_conv_size,
-                                        sample_rate=int(sample_rate),
-                                        stride=1, padding=0, dilation=1, 
-                                        bias=False, groups=1, 
-                                        min_low_hz=50, min_band_hz=50)
+        if self.front_proc == 'conv':
+            self.conv1 = nn.Conv1d(
+                in_channels,
+                nb_filters[0],
+                kernel_size=3,
+                stride=3,
+                padding=0        
+            )
+        elif self.front_proc == 'sinc':
+            #  sinc layer
+            sample_rate = audio_spec['sample_rate']
+            hoplength = int(audio_spec['hop_len'] * sample_rate * 1e-3)
+            winlength = int(audio_spec['win_len'] * sample_rate * 1e-3)
+            nb_samp = int(audio_spec['sentence_len'] * sample_rate)
 
-        self.first_bn = nn.BatchNorm1d(nb_filters[0])
+            self.ln = LayerNorm(nb_samp)
+            self.first_conv = SincConv_fast(in_channels=in_channels,
+                                            out_channels=nb_filters[0],
+                                            kernel_size=first_conv_size,
+                                            sample_rate=int(sample_rate),
+                                            stride=1, padding=0, dilation=1, 
+                                            bias=False, groups=1, 
+                                            min_low_hz=50, min_band_hz=50)
+
+            self.first_bn = nn.BatchNorm1d(nb_filters[0])
 
         #####
         # residual blocks for frame-level representations
@@ -80,39 +81,41 @@ class RawNet2(nn.Module):
         #####
         ## Aggregation layer
         #####
-        # aggregate to utterance(segment)-level asp
-
         self.aggregate = aggregate
+        if self.aggregate == 'gru':
+            # gru mode
+            self.bn_before_gru = nn.BatchNorm1d(nb_filters[5])
 
-        self.bn_before_agg = nn.BatchNorm1d(nb_filters[5])
-        self.attention_asp = nn.Sequential(
-            nn.Conv1d(nb_filters[5], att_dim, kernel_size=1),
-            nn.LeakyReLU(),
-            nn.BatchNorm1d(att_dim),
-            nn.Conv1d(att_dim, nb_filters[5], kernel_size=1),
-            nn.Softmax(dim=-1),
-        )
+            self.gru = nn.GRU(input_size=nb_filters[5],
+                              hidden_size=gru_node,
+                              num_layers=nb_gru_layers,
+                              batch_first=True)
 
-        # gru mode
-        self.bn_before_gru = nn.BatchNorm1d(nb_filters[5])
-
-        self.gru = nn.GRU(input_size=nb_filters[5],
-                          hidden_size=gru_node,
-                          num_layers=nb_gru_layers,
-                          batch_first=True)
-
-        self.fc_after_gru = nn.Linear(in_features=gru_node,
-                                      out_features=code_dim)
-        
-        # SAP: statistic attentive pooling
-        self.attention_sap = Classic_Attention(nb_filters[5], nb_filters[5])    
-        
+            self.fc_after_gru = nn.Linear(in_features=gru_node,
+                                          out_features=code_dim)
+            
+        elif self.aggregate == 'sap':
+            # SAP: statistic attentive pooling
+            self.bn_before_agg = nn.BatchNorm1d(nb_filters[5])
+            self.attention_sap = Classic_Attention(nb_filters[5], nb_filters[5])           
+            
+        else:
+            # aggregate to utterance(segment)-level asp
+            self.bn_before_agg = nn.BatchNorm1d(nb_filters[5])
+            self.attention = nn.Sequential(
+                nn.Conv1d(nb_filters[5], att_dim, kernel_size=1),
+                nn.LeakyReLU(),
+                nn.BatchNorm1d(att_dim),
+                nn.Conv1d(att_dim, nb_filters[5], kernel_size=1),
+                nn.Softmax(dim=-1),
+            )       
+  
         #####
         # speaker embedding layer
         #####
 
         self.fc = nn.Linear(nb_filters[5] * 2, code_dim)
-        self.fc2 = nn.Linear(code_dim , code_dim)
+        # self.fc2 = nn.Linear(code_dim , code_dim)
         self.lrelu = nn.LeakyReLU(0.3)  # keras style
 
         #####
@@ -212,7 +215,7 @@ class RawNet2(nn.Module):
             #####
             x = self.bn_before_agg(x)
             x = self.lrelu(x)
-            w = self.attention_asp(x)
+            w = self.attention(x)
             m = torch.sum(x * w, dim=-1)
             s = torch.sqrt(
                 (torch.sum((x ** 2) * w, dim=-1) - m ** 2).clamp(min=1e-5))
