@@ -18,12 +18,12 @@ def np_to_segment(np_array, sr=8000):
     return audio_segment
 
 
-def segment_to_np(segment, normalize=False):
+def segment_to_np(segment, normalize=False, dtype=np.float64):
     audio_array = segment.get_array_of_samples()
     audio_np = np.array(audio_array)
     if normalize:
         audio_np = normalize_audio_amp(audio_np)
-    return audio_np.astype(np.float64)
+    return audio_np.astype(dtype)
 
 
 def padding_np(audio, length_target):

@@ -12,7 +12,10 @@ from scipy import signal
 from .augment import (random_augment_speed, random_augment_pitch_shift,
                       random_augment_volume, gain_target_amplitude)
 from .wav_conversion import segment_to_np, np_to_segment, normalize_audio_amp
+from models.OnStreamAugment import timeaugment
+
 from pathlib import Path
+
 
 
 def random_augment_audio(audio_seg, setting):
@@ -54,7 +57,7 @@ def random_augment_audio(audio_seg, setting):
 def loadWAV(audio_source, audio_spec,
             evalmode=True, num_eval=10,
             augment=False, augment_options=None, target_db=None,
-            read_mode='pydub', random_chunk=True, load_all=False, ** kwargs):
+            read_mode='pydub', random_chunk=True, load_all=False, dtype=np.float32, ** kwargs):
     '''Load audio form .wav file and return as the np array
 
     Args:
@@ -91,14 +94,16 @@ def loadWAV(audio_source, audio_spec,
                     audio_seg, augment_options['augment_time_domain'])
 
             # convert to numpy with soundfile normalize format
-            audio = segment_to_np(audio_seg, normalize=True)
+            audio = segment_to_np(audio_seg, normalize=True, dtype=dtype)
 
     elif isinstance(audio_source, np.ndarray):
         audio = normalize_audio_amp(audio_source)
     else:
         raise "Invalid format of audio source, available: str, ndarray"
-
-    
+    # # perform time donmain augmentation
+    # if augment and ('time_domain' in augment_options['augment_chain']):
+    #     audio = timeaugment.TimeAugment(augment_options, audio_spec)(audio)
+   
     if load_all:
         return np.expand_dims(audio, 0)
     else:
@@ -140,7 +145,7 @@ def loadWAV(audio_source, audio_spec,
             for asf in startframe:
                 feats.append(audio[int(asf):int(asf) + max_audio])
 
-        feat = np.stack(feats, axis=0).astype(np.float)
+        feat = np.stack(feats, axis=0).astype(dtype)
 
         return feat
 
@@ -230,7 +235,7 @@ class AugmentWAV(object):
     def reverberate(self, audio):
         rir_file = random.choice(self.reverberation_files)
         rir = loadWAV(rir_file, self.audio_spec, evalmode=False,
-                      sample_rate=self.sr, target_db=self.target_db, load_all=True).astype(np.float)
+                      sample_rate=self.sr, target_db=self.target_db, load_all=True).astype(np.float32)
         rir = rir / np.sqrt(np.sum(rir ** 2))
         aug_audio = signal.convolve(audio, rir, mode='full')[
             :, :self.max_audio]
