@@ -327,11 +327,6 @@ if __name__ == '__main__':
                         action='store_true',
                         default=False,
                         help='Early stopping')
-
-    parser.add_argument('--seed',
-                        type=int,
-                        default=1000,
-                        help='seed')
   #--------------------------------------------------------------------------------------#
 
     sys_args = parser.parse_args()

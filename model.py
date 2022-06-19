@@ -18,6 +18,8 @@ from torch.cuda.amp import autocast, GradScaler
 from processing.audio_loader import loadWAV
 from utils import (similarity_measure, cprint)
 from dataloader import test_data_loader, worker_init_fn
+from models.OnStreamAugment import timeaugment
+
 
 
 class WrappedModel(nn.Module):
@@ -55,8 +57,6 @@ class SpeakerEncoder(nn.Module):
         self.device = torch.device(f'{device}:{self.gpu}')
         
         self.n_mels = kwargs['n_mels']
-        self.augment = kwargs['augment']
-        self.augment_chain = kwargs['augment_options']['augment_chain']
         self.features = features.lower()       
         
         if self.features in ['mfcc', 'melspectrogram']:
@@ -88,11 +88,9 @@ class SpeakerEncoder(nn.Module):
         #NOTE: nClasses is defined
         try:
             self.test_normalize = self.__L__.test_normalize
-            self.train_normalize = self.__L__.train_normalize
         except AttributeError:
             # not include in the loss init params
             self.test_normalize = False
-            self.train_normalize = False
         
         self.nPerSpeaker = kwargs['dataloader_options']['nPerSpeaker']
         
@@ -103,11 +101,12 @@ class SpeakerEncoder(nn.Module):
                 self.classifier['input_size'], self.classifier['out_neurons'])
 
         ####Print information only on main process
+        
         if self.gpu == 0:
             nb_params = sum([param.view(-1).size()[0]
-                            for param in self.__S__.parameters()])
+                            for param in self.__S__.parameters() if param.requires_grad])
             print("Model information:")
-            print(f"- Initialized model: {self.model['name']} - {nb_params:,} params")
+            print(f"- Initialized model: {self.model['name']} - Trainable params: {nb_params:,}")
             print(f"- Using loss function: {self.criterion['name']}")
             print(f"- Embedding normalized: ", self.test_normalize)
         
@@ -119,18 +118,15 @@ class SpeakerEncoder(nn.Module):
         # forward n utterances per speaker and stack the output
         for inp in data:
             if self.features != 'raw':
-                inp = self.compute_features(inp.to(self.device)) # convert raw audio to mel
+                inp = self.compute_features(inp) # convert raw audio to mel
                 
             # output = self.__S__.forward(inp.to(self.device))
             
             ## Beta for the recognition task
             if self.include_top:
-                output = self.fc(self.__S__.forward(inp.to(self.device)))
+                output = self.fc(self.__S__.forward(inp))
             else:
-                output = self.__S__.forward(inp.to(self.device))
-            
-            if self.train_normalize:
-                output = F.normalize(output, p=2, dim=1)
+                output = self.__S__.forward(inp)
                 
             feat.append(output)
 
@@ -151,7 +147,7 @@ class ModelHandling(object):
                  optimizer='adam', 
                  callbacks='steplr',  
                  device='cuda',
-                 gpu=0,  mixedprec=False, **kwargs):
+                 gpu=0, mixedprec=False, **kwargs):
         """_summary_
 
         Args:
@@ -174,12 +170,20 @@ class ModelHandling(object):
         self.T_max = 0 if 'T_max' not in self.kwargs else self.kwargs['T_max']
 
         self.__model__ = encoder_model
+        self.model_name = self.__model__.module.model['name']
+        self.criterion = self.__model__.module.criterion['name']
         
         self.scaler = GradScaler()
 
         self.gpu = gpu
         self.device = torch.device(f"{device}:{gpu}")
         
+        self.augment = kwargs['augment']
+        self.augment_chain = kwargs['augment_options']['augment_chain']
+        # if self.augment and 'time_domain_torch' in self.augment_chain:
+        #     self.augment_onstream_engine = timeaugment.TimeAugment(augment_options=kwargs['augment_options'], 
+        #                                                            audio_spec=self.audio_spec)
+            
         self.mixedprec = mixedprec
         
         Optimizer = importlib.import_module(
@@ -191,16 +195,18 @@ class ModelHandling(object):
 
         self.callback = callbacks
 
-        if self.callback['name'] in ['steplr', 'cosinelr', 'cycliclr']:
+        if self.callback['name'] in ['steplr', 'cosine_annealinglr_pt', 'cycliclr']:
             Scheduler = importlib.import_module(
                 'callbacks.torch_callbacks').__getattribute__(f"{self.callback['name'].lower()}")
             self.__scheduler__, self.lr_step = Scheduler(self.__optimizer__,                                                          
                                                          lr_decay=optimizer['lr_decay'], **dict(kwargs, T_max=self.T_max))
         elif self.callback['name'] == 'reduceOnPlateau':
             Scheduler = importlib.import_module(
-                'callbacks.' + self.callback['name']).__getattribute__('LRScheduler')
-            self.__scheduler__ = Scheduler(self.__optimizer__,
-                                           patience=self.kwargs['step_size'], 
+                'callbacks.' + callbacks).__getattribute__('LRScheduler')
+            self.__scheduler__ = Scheduler(self.__optimizer__, 
+                                           step_size=self.callback['step_size'], 
+                                           lr_decay=optimizer['lr_decay'], 
+                                           patience=self.callback['step_size'], 
                                            min_lr=self.callback['base_lr'], factor=0.95)
             self.lr_step = 'epoch'
         
@@ -233,7 +239,10 @@ class ModelHandling(object):
             loader_bar = loader
         
         for (data, data_label) in loader_bar:
-            data = data.transpose(0, 1)
+            # if self.augment and 'time_domain_torch' in self.augment_chain:
+            #     data = self.augment_onstream_engine.forward(data)
+                
+            data = data.transpose(0, 1) # batch, channel, num_samples -> channel, batch, num_samples
             
             self.__model__.zero_grad()
             
@@ -264,7 +273,7 @@ class ModelHandling(object):
                 self.__scheduler__.step()
 
         # select mode for callbacks
-        if self.lr_step == 'epoch' and self.callback['name'] not in ['reduceOnPlateau', 'auto']:
+        if self.lr_step == 'epoch' and self.callback not in ['reduceOnPlateau', 'auto']:
             self.__scheduler__.step()
 
         elif self.callback == 'reduceOnPlateau':
@@ -350,6 +359,7 @@ class ModelHandling(object):
             shuffle=False,
             num_workers=dataloader_options['num_workers'],
             worker_init_fn=None,
+            pin_memory=True,
             drop_last=False,
             sampler=sampler
         )
@@ -716,7 +726,7 @@ class ModelHandling(object):
             raise "Model's path is not exists"
 
     def export_onnx(self, state_path, check=True):
-        save_root = self.save_path + f"/{self.model_name}/model"
+        save_root = self.save_path + f"/{self.model_name}/{self.criterion}/model"
         save_path = os.path.join(save_root, f"model_eval_{self.model_name}.onnx")
 
         input_names = ["input"]
@@ -724,7 +734,7 @@ class ModelHandling(object):
         # NOTE: because using torch.audio -> cant export onnx
         # nume_val, samplerate * (1 + win_len - hoplen)
         n_s = self.kwargs['num_eval']
-        dim = self.audio_spec['sample_rate'] * self.audio_spec['sentence_len']
+        dim = int(self.audio_spec['sample_rate'] * self.audio_spec['sentence_len'])
         dummy_input = torch.randn(n_s, dim, device="cuda")
 
         self.loadParameters(state_path)

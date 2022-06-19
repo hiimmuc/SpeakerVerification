@@ -10,7 +10,7 @@ import subprocess
 import sys
 import os
 from collections import namedtuple
-from collect_sys import *
+
 
 try:
     import torch
@@ -468,9 +468,6 @@ def get_pretty_env_info():
 
 
 def main():
-    print("Collecting system information...")
-    get_sys_information()
-    print('\n' + '='*40 + '\n')
     print("Collecting environment information...")
     output = get_pretty_env_info()
     print(output)

@@ -25,4 +25,11 @@ if __name__ == '__main__':
 
     nb_params = sum([param.view(-1).size()[0] for param in model.parameters()])
     print("nb_params:{}".format(nb_params))
-    summary(model, (16000,), batch_size=args.batch_size, device='cpu')
+    if str(args.features) != 'raw':
+        max_frames = round(args.audio_spec['sample_rate'] * (
+            args.audio_spec['sentence_len'] - args.audio_spec['win_len']) / args.audio_spec['hop_len'])
+        input_dim = (int(args.n_mels), max_frames)
+    else:
+        input_dim = (int(args.audio_spec['sample_rate'] * args.audio_spec['sentence_len']),)
+    
+    summary(model, input_dim , device='cpu', depth=3, col_width=16, col_names=["input_size", "output_size", "num_params", "mult_adds"])

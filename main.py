@@ -23,9 +23,8 @@ def main(args):
 
         else:
             raise 'Wrong main mode, available: do_train, do_infer, do_export'
-    except KeyboardInterrupt:
-        os.system(
-            "kill $(ps aux | grep 'main.py' | grep -v grep | awk '{print $2}')")
+    except KeyboardInterrupt: 
+        os.system("kill $(ps aux | grep 'main.py' | grep -v grep | awk '{print $2}')")
         sys.exit(1)
 
 
@@ -92,6 +91,7 @@ if __name__ == '__main__':
                         action='store_true',
                         default=False,
                         help='Early stopping')
+
    #--------------------------------------------------------------------------------------#
 
     sys_args = parser.parse_args()
@@ -131,7 +131,7 @@ if __name__ == '__main__':
 
     # Run
     n_gpus = torch.cuda.device_count()
-
+    
     print('Seed:', args.seed)
     print('Python Version:', sys.version)
     print('PyTorch Version:', torch.__version__)
