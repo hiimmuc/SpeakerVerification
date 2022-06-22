@@ -1,3 +1,4 @@
+import math
 import argparse
 import importlib
 from torchsummary import summary
@@ -25,11 +26,14 @@ if __name__ == '__main__':
 
     nb_params = sum([param.view(-1).size()[0] for param in model.parameters()])
     print("nb_params:{}".format(nb_params))
+    print("features:", str(args.features))
     if str(args.features) != 'raw':
-        max_frames = round(args.audio_spec['sample_rate'] * (
-            args.audio_spec['sentence_len'] - args.audio_spec['win_len']) / args.audio_spec['hop_len'])
+        max_audio = int(args.audio_spec['sample_rate'] * args.audio_spec['sentence_len'])
+        hop_frames = int(args.audio_spec['sample_rate'] * args.audio_spec['hop_len'])
+        win_frames = int(args.audio_spec['sample_rate'] * args.audio_spec['win_len'])
+        overlapped = win_frames - hop_frames
+        max_frames = math.ceil((max_audio - overlapped) / hop_frames) + 2
         input_dim = (int(args.n_mels), max_frames)
     else:
-        input_dim = (int(args.audio_spec['sample_rate'] * args.audio_spec['sentence_len']),)
-    
-    summary(model, input_dim , device='cpu', depth=3, col_width=16, col_names=["input_size", "output_size", "num_params", "mult_adds"])
+        input_dim = (int(args.audio_spec['sample_rate'] * args.audio_spec['sentence_len']),)   
+    summary(model, input_dim, device='cpu', depth=3, col_width=16, col_names=["input_size", "output_size", "num_params", "mult_adds"])
