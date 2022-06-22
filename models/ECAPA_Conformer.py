@@ -7,7 +7,8 @@ import numpy as np
 from models.ECAPA_TDNN import *
 from models.ECAPA_utils import Conv1d as _Conv1d
 from models.ECAPA_utils import BatchNorm1d as _BatchNorm1d
-from models.conformer.conformer.encoder import ConformerEncoder
+# from models.conformer.conformer.encoder import ConformerEncoder
+from conformer.encoder import ConformerEncoder
 
 
 class ECAPA_Conformer(torch.nn.Module):
@@ -42,7 +43,7 @@ class ECAPA_Conformer(torch.nn.Module):
         input_size=80,
         lin_neurons=192,
         activation=torch.nn.GELU,
-        channels=[1024, 1024, 1024, 1024, 3072],
+        channels=[512, 512, 512, 512, 1536],
         kernel_sizes=[5, 3, 3, 3, 1],
         dilations=[1, 2, 3, 4, 1],
         attention_channels=128,
@@ -104,36 +105,44 @@ class ECAPA_Conformer(torch.nn.Module):
             activation,
         )
         
-        # Conformer
+        ## Conformer
+        # settings:
+        # Type | Encoder Layers | Encoder Dim | Attention Heads | Conv Kernel Size
+        #  S           16             144             4                  32    
+        #  M           16             256             4                  32                 
+        #  L           17             512             8                  32                 
+        
+        encoder_dim = 144 # encoders layers S: 144 M: 256 L: 512
         self.conformer_block = ConformerEncoder(
             input_dim = channels[-1],
-            encoder_dim = lin_neurons,
+            encoder_dim = encoder_dim,
             num_layers = 16,
-            num_attention_heads = 8,
+            num_attention_heads = 4,
             feed_forward_expansion_factor = 4,
             conv_expansion_factor = 2,
             input_dropout_p = 0.1,
             feed_forward_dropout_p = 0.1,
             attention_dropout_p = 0.1,
             conv_dropout_p = 0.1,
-            conv_kernel_size = 3,
-            half_step_residual = True
+            conv_kernel_size = 31,
+            half_step_residual = True,
         )
         
         # Attentive Statistical Pooling
         self.asp = AttentiveStatisticsPooling(
-            lin_neurons,
+            encoder_dim,
             attention_channels=attention_channels,
             global_context=global_context,
         )
-        self.asp_bn = BatchNorm1d(input_size=(lin_neurons * 2))
+        self.asp_bn = BatchNorm1d(input_size=(encoder_dim * 2))
 
         # Final linear transformation
         self.fc = Conv1d(
-            in_channels=lin_neurons * 2,
+            in_channels=encoder_dim * 2,
             out_channels=lin_neurons,
             kernel_size=1,
         )
+        
 
     def forward(self, x, lengths=None):
         """Returns the embedding vector.
@@ -166,11 +175,13 @@ class ECAPA_Conformer(torch.nn.Module):
         # Multi-layer feature aggregation
         x = torch.cat(xl[1:], dim=1)
         x = self.mfa(x)
-
+        
         # conformer
-        x = x.transpose(1, -1)
-        x = self.conformer_block(x)
-        x = x.transpose(1, -1)
+        x = x.squeeze(1).permute(0, 2, 1)
+        lens = torch.ones(x.shape[0]).to(x.device)
+        lens = torch.round(lens*x.shape[1]).int()
+        x, masks = self.conformer_block(x, lens)
+        x = x.permute(0, 2, 1)
 
         # Attentive Statistical Pooling
         x = self.asp(x, lengths=lengths)

@@ -18,7 +18,10 @@ class Raw_ECAPA(nn.Module):
 
     def __init__(self, nOut=512, **kwargs):
         super(Raw_ECAPA, self).__init__()
-        self.ECAPA_TDNN = ECAPA_TDNN.MainModel(nOut=192, channels= [512, 512, 512, 512, 1536], **kwargs)
+        
+        self.ECAPA_TDNN = ECAPA_TDNN.MainModel(nOut=192, 
+                                               channels= [512, 512, 512, 512, 1536],
+                                               input_norm=True, **kwargs)
         self.rawnet2v2 = RawNet2_custom.MainModel(nOut=nOut-192,
                                                   front_proc='conv',  aggregate='asp',
                                                   att_dim=128, **kwargs)
@@ -34,7 +37,9 @@ class Raw_ECAPA(nn.Module):
         # #####
         # # forward model 1
         # #####
-        x_spec = self.compute_features(x)
+        with torch.no_grad():
+            with torch.cuda.amp.autocast(enabled=False):
+                         x_spec = self.compute_features(x)
         out1 = self.ECAPA_TDNN(x_spec)
         # #####
         # # forward model 2

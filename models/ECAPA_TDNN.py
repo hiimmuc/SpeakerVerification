@@ -383,6 +383,7 @@ class ECAPA_TDNN(torch.nn.Module):
         attention_channels=128,
         res2net_scale=8,
         se_channels=128,
+        input_norm=False,
         global_context=True,
         **kwargs
     ):
@@ -394,17 +395,20 @@ class ECAPA_TDNN(torch.nn.Module):
         assert input_size == kwargs['n_mels'], "inappropriate input size, should equal feature_dim"
         
         self.channels = channels
+        self.input_norm = input_norm
+        
         self.aug = kwargs['augment']
         self.aug_chain = kwargs['augment_options']['augment_chain']        
         self.kwargs = kwargs
         
         self.blocks = nn.ModuleList()
-
+        
         self.specaug = SpecAugment()  # Spec augmentation
         
-        self.instance_norm = nn.InstanceNorm1d(input_size, affine=True, 
-                                               eps=1e-05, momentum=0.1, 
-                                               track_running_stats=False)
+        if self.input_norm:
+            self.instance_norm = nn.InstanceNorm1d(input_size, affine=True, 
+                                                   eps=1e-05, momentum=0.1, 
+                                                   track_running_stats=False)
 
         # The initial TDNN layer
         self.blocks.append(
@@ -465,13 +469,15 @@ class ECAPA_TDNN(torch.nn.Module):
         # Minimize transpose for efficiency
 
         with torch.no_grad():
-            if self.aug and 'spec_domain' in self.aug_chain:
-                x = self.specaug(x)
-            if self.kwargs['features'] == 'melspectrogram':
-                x = x + 1e-6
-                x = x.log() # this will cause nan value for MFCC features
-                x = x - torch.mean(x, dim=-1, keepdim=True)
-            x = self.instance_norm(x)
+            with torch.cuda.amp.autocast(enabled=False):
+                if self.aug and 'spec_domain' in self.aug_chain:
+                    x = self.specaug(x)
+                if self.kwargs['features'].strip() == 'melspectrogram':
+                    x = x + 1e-6
+                    x = x.log() # this will cause nan value for MFCC features
+                    x = x - torch.mean(x, dim=-1, keepdim=True)
+                if self.input_norm:
+                    x = self.instance_norm(x)
 
         # x shape: batch x n_mels x n_frames or batch x fea x time
 
