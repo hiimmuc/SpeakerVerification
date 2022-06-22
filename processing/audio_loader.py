@@ -54,7 +54,7 @@ def random_augment_audio(audio_seg, setting):
 # ================================================Utils============================================
 
 
-def loadWAV(audio_source, audio_spec,
+def loadWAV(audio_source, audio_spec=None,
             evalmode=True, num_eval=10,
             augment=False, augment_options=None, target_db=None,
             read_mode='pydub', random_chunk=True, load_all=False, dtype=np.float32, ** kwargs):
@@ -71,6 +71,12 @@ def loadWAV(audio_source, audio_spec,
     Returns:
         ([ndarray]): audio_array
     '''
+    if not audio_spec:
+        audio_spec = {'sample_rate': 8000,
+                      'channels': 1,
+                      'sentence_len': 2.0,
+                      'win_len': 0.025,
+                      'hop_len': 0.01}
     set_sample_rate = audio_spec['sample_rate']
 
     if isinstance(audio_source, str):
@@ -115,9 +121,10 @@ def loadWAV(audio_source, audio_spec,
 
         n_hop_frames = int(audio_spec['hop_len'] * set_sample_rate)
         n_win_frames = int(audio_spec['win_len'] * set_sample_rate)
-        max_audio = int(audio_spec['sentence_len'] * set_sample_rate) # max_audio = int(max_frames * n_hop_frames + n_overlap_frames)
-
         n_overlap_frames = n_win_frames - n_hop_frames
+        
+        max_audio = int((audio_spec['sentence_len']) * set_sample_rate) # max_audio = int(max_frames * n_hop_frames + n_overlap_frames)
+        
         max_frames = round((max_audio - n_overlap_frames) / n_hop_frames)
         assert max_frames > 0, "invalid size of frame"
 
