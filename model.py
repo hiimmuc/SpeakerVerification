@@ -18,8 +18,6 @@ from torch.cuda.amp import autocast, GradScaler
 from processing.audio_loader import loadWAV
 from utils import (similarity_measure, cprint)
 from dataloader import test_data_loader, worker_init_fn
-from models.OnStreamAugment import timeaugment
-
 
 
 class WrappedModel(nn.Module):
@@ -99,16 +97,6 @@ class SpeakerEncoder(nn.Module):
         if self.include_top:
             self.fc = nn.Linear(
                 self.classifier['input_size'], self.classifier['out_neurons'])
-
-        ####Print information only on main process
-        
-        if self.gpu == 0:
-            nb_params = sum([param.view(-1).size()[0]
-                            for param in self.__S__.parameters() if param.requires_grad])
-            print("Model information:")
-            print(f"- Initialized model: {self.model['name']} - Trainable params: {nb_params:,}")
-            print(f"- Using loss function: {self.criterion['name']}")
-            print(f"- Embedding normalized: ", self.test_normalize)
         
     def forward(self, data, label=None):
         # data size: n_speaker x bsize x n_samples
@@ -179,11 +167,7 @@ class ModelHandling(object):
         self.device = torch.device(f"{device}:{gpu}")
         
         self.augment = kwargs['augment']
-        self.augment_chain = kwargs['augment_options']['augment_chain']
-        # if self.augment and 'time_domain_torch' in self.augment_chain:
-        #     self.augment_onstream_engine = timeaugment.TimeAugment(augment_options=kwargs['augment_options'], 
-        #                                                            audio_spec=self.audio_spec)
-            
+        self.augment_chain = kwargs['augment_options']['augment_chain']            
         self.mixedprec = mixedprec
         
         Optimizer = importlib.import_module(
@@ -211,6 +195,19 @@ class ModelHandling(object):
             self.lr_step = 'epoch'
         
         assert self.lr_step in ['epoch', 'iteration']
+        
+                ####Print information only on main process
+        
+        if self.gpu == 0:
+            nb_params = sum([param.view(-1).size()[0]
+                            for param in self.__model__.module.__S__.parameters() if param.requires_grad])
+            print("Model information:")
+            print(f"- Initialized model: {self.__model__.module.model['name']} - Trainable params: {nb_params:,}")
+            print(f"- Using loss function: {self.__model__.module.criterion['name']}")
+            print(f"- Embedding normalized: ", self.__model__.module.test_normalize)
+            print(f"- Using callback: {self.callback['name']}")
+            print(f"- Using optimizer: {optimizer['name']}")           
+        # ================================================================================================
 
     # ## ===== ===== ===== ===== ===== ===== ===== =====
     # ## Train network
