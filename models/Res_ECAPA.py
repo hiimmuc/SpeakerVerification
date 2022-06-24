@@ -237,9 +237,10 @@ class ECAPA_TDNN_core(torch.nn.Module):
 
 def MainModel(nOut=128, **kwargs):
     num_filters = [32, 64]
-    res_blocks = ResNetSE_no_head(SEBasicBlock, [1, 1], num_filters, num_filters[-1], **kwargs)
+    num_layers = [2, 2]
+    res_blocks = ResNetSE_no_head(SEBasicBlock, num_layers, num_filters, num_filters[-1], **kwargs)
     
-    n_features = kwargs['n_mels']
+    n_features = kwargs['n_mels'] if kwargs['features'] == 'melspectrogram' else kwargs['n_mfcc']
     input_size_tdnn = int(num_filters[-1] * n_features * (2 ** (-1 * len(num_filters))))
     
     ecapa_blocks = ECAPA_TDNN_core(input_size=input_size_tdnn,

@@ -18,12 +18,13 @@ class Raw_ECAPA(nn.Module):
 
     def __init__(self, nOut=512, **kwargs):
         super(Raw_ECAPA, self).__init__()
-        
+        # SiLU, ReLU, GELU
         self.ECAPA_TDNN = ECAPA_TDNN.MainModel(nOut=192, 
+                                               activation=torch.nn.GELU,
                                                channels= [512, 512, 512, 512, 1536],
                                                input_norm=True, **kwargs)
         self.rawnet2v2 = RawNet2_custom.MainModel(nOut=nOut-192,
-                                                  front_proc='conv',  aggregate='asp',
+                                                  front_proc='sinc',  aggregate='asp',
                                                   att_dim=128, **kwargs)
         # self.rawnet2v2 = RawNet2v2.MainModel(nOut=nOut-192,**kwargs)
         features = 'melspectrogram'

@@ -33,12 +33,12 @@ class Raw_ECAPA(nn.Module):
         self.bn_before_agg = nn.BatchNorm1d(nOut)
         self.attention = nn.Sequential(
             nn.Conv1d(nOut, att_size, kernel_size=1),
-            nn.LeakyReLU(),
+            nn.SiLU(),
             nn.BatchNorm1d(att_size),
             nn.Conv1d(att_size, nOut, kernel_size=1),
-            nn.Softmax(dim=-1),
+            nn.Softmax(dim=1),
         )
-        self.fc = nn.Linear(nOut * 2, 512)
+        self.fc = nn.Linear(nOut * 2, nOut)
         self.lrelu = nn.LeakyReLU(0.3)
 
     def forward(self, x):
@@ -59,17 +59,19 @@ class Raw_ECAPA(nn.Module):
         # #####
         out2 = self.rawnet2v2(x)
         #
-        out = torch.cat([out1, out2], dim=-1).unsqueeze(-1) # bs, nOut -> bs, nOut, 1
+        out = torch.cat([out1, out2], dim=-1)
         
         out = self.bn_before_agg(out)
         
         out = self.lrelu(out)
         
+        out = out.unsqueeze(-1) # bs, nOut -> bs, nOut, 1  to perform conv1 
+
         w = self.attention(out)
         
-        m = torch.sum(out * w, dim=-1)
+        m = torch.sum(out * w, dim=-1) # mean
         s = torch.sqrt(
-            (torch.sum((out ** 2) * w, dim=-1) - m ** 2).clamp(min=1e-5))
+            (torch.sum((out ** 2) * w, dim=-1) - m ** 2).clamp(min=1e-9)) # standard
         out = torch.cat([m, s], dim=1)
         out = out.view(out.size(0), -1)       
 

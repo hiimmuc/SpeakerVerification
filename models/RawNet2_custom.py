@@ -24,7 +24,7 @@ class RawNet2(nn.Module):
 
     def __init__(self, block, layers, nb_filters,
                  audio_spec,
-                 front_proc='sinc',  aggregate='asp',
+                 front_proc='sinc',  aggregate='gru',
                  att_dim=128,
                  code_dim=512,
                  in_channels=1,
@@ -164,7 +164,7 @@ class RawNet2(nn.Module):
         #####
         
         if self.front_proc == 'conv':
-            x = x.unsqueeze(1)
+            x = x.unsqueeze(1) # batch, n_samples -> batch, 1, n_samples
             # conv
             x = self.conv1(x)
         elif self.front_proc == 'sinc':
