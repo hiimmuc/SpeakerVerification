@@ -12,7 +12,6 @@ from scipy import signal
 from .augment import (random_augment_speed, random_augment_pitch_shift,
                       random_augment_volume, gain_target_amplitude)
 from .wav_conversion import segment_to_np, np_to_segment, normalize_audio_amp
-from models.OnStreamAugment import timeaugment
 
 from pathlib import Path
 
@@ -107,8 +106,6 @@ def loadWAV(audio_source, audio_spec=None,
     else:
         raise "Invalid format of audio source, available: str, ndarray"
     # # perform time donmain augmentation
-    # if augment and ('time_domain' in augment_options['augment_chain']):
-    #     audio = timeaugment.TimeAugment(augment_options, audio_spec)(audio)
    
     if load_all:
         return np.expand_dims(audio, 0)
