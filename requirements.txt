@@ -34,3 +34,4 @@ Werkzeug==2.1.2
 torch-audiomentations
 audiomentations
 pytorch-metric-learning
+asteroid-filterbanks
