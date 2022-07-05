@@ -13,7 +13,7 @@ from torch.nn.parameter import Parameter
 from torch.utils import data
 from torchsummary import summary
 from utils import *
-from models.RawNet2_baseline import *
+from models.RawNet_baseline import *
 
 class RawNet2(nn.Module):
     """
