@@ -162,9 +162,7 @@ def get_audio_ffmpeg_astats(filename):
         if k not in details:
             details[k] = None
     
-    
     details['Duration'] = get_duration_file(filename)
-    details['Size'] = get_size_file(filename)
     
     return details
 

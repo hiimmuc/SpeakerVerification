@@ -10,6 +10,14 @@ from models.RawNet_baseline import Bottle2neck, PreEmphasis
 class RawNet3(nn.Module):
     def __init__(self, block, model_scale, context, summed, C=1024, **kwargs):
         super().__init__()
+        """
+        kwargs:
+        - sinc_stride
+        - encoder_type
+        - log_sinc
+        - norm_sinc
+        - out_bn
+        """
 
         nOut = kwargs["nOut"]
 
@@ -19,6 +27,8 @@ class RawNet3(nn.Module):
         self.norm_sinc = kwargs["norm_sinc"]
         self.out_bn = kwargs["out_bn"]
         self.summed = summed
+        
+        self.context_dim = 1536
 
         self.preprocess = nn.Sequential(
             PreEmphasis(), nn.InstanceNorm1d(1, eps=1e-4, affine=True)
@@ -40,15 +50,15 @@ class RawNet3(nn.Module):
             C, C, kernel_size=3, dilation=3, scale=model_scale, pool=3
         )
         self.layer3 = block(C, C, kernel_size=3, dilation=4, scale=model_scale)
-        self.layer4 = nn.Conv1d(3 * C, 1536, kernel_size=1)
+        self.layer4 = nn.Conv1d(3 * C, self.context_dim, kernel_size=1)
 
         if self.context:
-            attn_input = 1536 * 3
+            attn_input = self.context_dim * 3
         else:
-            attn_input = 1536
+            attn_input = self.context_dim
         print("self.encoder_type", self.encoder_type)
         if self.encoder_type == "ECA":
-            attn_output = 1536
+            attn_output = self.context_dim
         elif self.encoder_type == "ASP":
             attn_output = 1
         else:
@@ -62,9 +72,9 @@ class RawNet3(nn.Module):
             nn.Softmax(dim=2),
         )
 
-        self.bn5 = nn.BatchNorm1d(3072)
+        self.bn5 = nn.BatchNorm1d(self.context_dim * 2)
 
-        self.fc6 = nn.Linear(3072, nOut)
+        self.fc6 = nn.Linear(self.context_dim * 2, nOut)
         self.bn6 = nn.BatchNorm1d(nOut)
 
         self.mp3 = nn.MaxPool1d(3)
@@ -139,6 +149,8 @@ class RawNet3(nn.Module):
 def MainModel(**kwargs):
 
     model = RawNet3(
-        Bottle2neck, model_scale=8, context=True, summed=True, out_bn=False, log_sinc=True, norm_sinc="mean", grad_mult=1, encoder_type='ASP', **kwargs
+        Bottle2neck, model_scale=8, context=True, summed=True, out_bn=False, log_sinc=True, 
+        norm_sinc="mean", grad_mult=1, encoder_type='ASP', sinc_stride=10,
+        **kwargs
     )
     return model
