@@ -67,7 +67,7 @@ class SpeakerEncoder(nn.Module):
         if isinstance(self.model['name'], str):
             SpeakerNetModel = importlib.import_module(
                 'models.' + self.model['name']).__getattribute__('MainModel')
-            self.__S__ = SpeakerNetModel(nOut=self.model['nOut'], features = self.features, **kwargs).to(self.device)
+            self.__S__ = SpeakerNetModel(nOut=self.model['nOut'], features = self.features, device=self.device, **kwargs).to(self.device)
         else:
             assert isinstance(self.model['name'], list)
             del kwargs['features']
@@ -193,6 +193,8 @@ class ModelHandling(object):
                                            patience=self.callback['step_size'], 
                                            min_lr=self.callback['base_lr'], factor=0.95)
             self.lr_step = 'epoch'
+        else:
+            raise 'Invalid callbacks'
         
         assert self.lr_step in ['epoch', 'iteration']
         

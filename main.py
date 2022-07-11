@@ -121,7 +121,7 @@ if __name__ == '__main__':
 
     # parse metadata to save files
     metadata_path = os.path.join(args.save_folder, 'metadata')
-    if os.path.exists(os.path.join(args.data_folder, 'metadata')) and os.path.exists(metadata_path):
+    if os.path.exists(os.path.join(args.data_folder, 'metadata')) or os.path.exists(metadata_path):
         print("Metadata files are exist, skip preparing...")
     else:
         print("Metadata files are not exist, start preparing...")
