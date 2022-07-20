@@ -3,8 +3,9 @@ import itertools
 import os
 import csv
 import time
+import glob
 
-from argparse import Namespace
+import argparse
 from pathlib import Path
 import numpy as np
 from pydub import AudioSegment
@@ -21,38 +22,11 @@ def all_pairs(lst):
 
 
 def check_matching(ref_emb, com_emb, threshold=0.5):
-    score = cosine_simialrity(ref_emb, com_emb)
+    score = similarity_measure(method='cosine',ref= ref_emb, com=com_emb)
     ratio = threshold / 0.5
     result = (score / ratio) if (score / ratio) < 1 else 1
     matching = result > 0.5
     return matching, result
-
-
-def read_blacklist(id, duration_limit=1.0, dB_limit=-16, error_limit=0, noise_limit=-15, details_dir="dataset/train_callbot/details"):
-    '''
-    header = ['File name', 'Duration', 'Size(MB)', 'Min level', 'Max level', 
-              'Min difference', 'Max difference', 'Mean difference', 'RMS difference', 
-              'Peak level dB', 'RMS level dB',   'RMS peak dB', 'RMS trough dB', 
-              'Crest factor', 'Flat factor', 'Peak count',
-              'Noise floor dB', 'Noise floor count', 'Bit depth', 'Dynamic range', 
-              'Zero crossings', 'Zero crossings rate', 'Error rate', 'Full path']
-    '''
-    blacklist = []
-    readfile = str(Path(details_dir, f"{id}.csv"))
-    if os.path.exists(readfile):
-        with open(readfile, 'r', newline='') as rf:
-            spamreader = csv.reader(rf, delimiter=',')
-            next(spamreader, None)
-            for row in spamreader:
-                short_length = (float(row[1]) < duration_limit)
-                low_amplitude = (float(row[9]) < dB_limit)
-                high_err = (float(row[-2]) > error_limit)
-                high_noise = (float(row[16]) > noise_limit)
-                if short_length or low_amplitude or high_err or high_noise:
-                    blacklist.append(Path(row[-1]))
-        return list(set(blacklist))
-    else:
-        return None
 
 
 def benchmark_dataset_by_model(model_path=None,
@@ -70,7 +44,7 @@ def benchmark_dataset_by_model(model_path=None,
     max_iter_size = args.step_size
     model = ModelHandling(net, **dict(vars(args), T_max=max_iter_size))
     model.loadParameters(model_path, show_error=False)
-    model.eval()
+    model.__model__.eval()
     print("Model Loaded time: ", time.time() - t0)
 
     # ===================================================
@@ -84,7 +58,7 @@ def benchmark_dataset_by_model(model_path=None,
         imposters = {}
 
         for fn in filepaths:
-            emb = model.embed_utterance(source,
+            emb = model.embed_utterance(fn,
                                         num_eval=20,
                                         normalize=True)
             if fn not in files_emb_dict:
@@ -111,7 +85,7 @@ def benchmark_dataset_by_model(model_path=None,
 
                 
 if __name__ == '__main__':
-    model_path = str(Path('backup/2811/save/Raw_ECAPA_hype/AAmSoftmaxAP/model/best_state'))
+    model_path = str(Path('backup/2811/save/Raw_ECAPA_hype/AAmSoftmaxAP/model/best_state.pt'))
     config_path=str(Path('backup/2811/save/Raw_ECAPA_hype/AAmSoftmaxAP/config/configuration.yaml'))
     threshold=0.4
     root='dataset/train_data/gannhan_bm/wav/'
