@@ -17,7 +17,7 @@ from pydub import AudioSegment
 from werkzeug.utils import secure_filename
 import soundfile as sf
 
-from model import SpeakerNet
+from model import SpeakerEncoder, WrappedModel, ModelHandling
 from utils import (read_config, cprint)
 from server_utils import *
 
@@ -26,29 +26,33 @@ log_service_root = str(Path('log_service/'))
 os.makedirs(log_service_root, exist_ok=True)
 
 # ==================================================load Model========================================
-sr = 8000
-eval_frames=200
-num_eval=20
-normalize=True
-
 norm_mode = 'uniform'
 base_threshold = 0.5
 compare_threshold = 0.6
 
-threshold = 0.27198657393455505
-model_path = str(Path('backup/1001/Raw_ECAPA/ARmSoftmax/model/best_state.pt'))
-config_path = str(Path('backup/1001/Raw_ECAPA/ARmSoftmax/config/config_eval.yaml'))
+threshold = 0.30186375975608826
+model_path = str(Path('backup/1001/Raw_ECAPA/ARmSoftmax/model/best_state_top4.pt'))
+config_path = str(Path('yaml/configuration.yaml'))
 args = read_config(config_path)
 
 print("\n<<>> Loaded from:", model_path, "with threshold:", threshold)
 
 # read config and load model
 args = read_config(config_path)
+args = Namespace(**args)
 
+sr = args.audio_spec['sample_rate']
+num_eval = args.num_eval
+normalize=True
+##
 t0 = time.time()
-model = SpeakerNet(**vars(args))
-model.loadParameters(model_path, show_error=False)
-model.eval()
+net = WrappedModel(SpeakerEncoder(**vars(args)))
+max_iter_size = args.step_size
+speaker_model = ModelHandling(
+        net, **dict(vars(args), T_max=max_iter_size))
+speaker_model.loadParameters(model_path, show_error=False)
+speaker_model.__model__.eval()
+
 print("Model Loaded time: ", time.time() - t0)
 
 # ================================================Flask API=============================================
@@ -106,13 +110,13 @@ def check_matching():
     
     # convertstring of base64 to np array
     dtype = np.float64
-    ref_audio_data_np = [decode_audio(audio_data, sr, dtype) for audio_data in ref_audio_data]
-    com_audio_data_np = [decode_audio(audio_data, sr, dtype) for audio_data in com_audio_data]
+    ref_audio_data_np = [decode_audio(audio_data, args.audio_spec, dtype) for audio_data in ref_audio_data]
+    com_audio_data_np = [decode_audio(audio_data, args.audio_spec, dtype) for audio_data in com_audio_data]
     
-    # preprcess audio
-#     target_db = -10
-#     ref_audio_data_np = [preprocess_audio(audio_data_np, target_db) for audio_data_np in ref_audio_data_np]
-#     com_audio_data_np = [preprocess_audio(audio_data_np, target_db) for audio_data_np in com_audio_data_np]   
+    ## preprcess audio
+    # target_db = -10
+    # ref_audio_data_np = [preprocess_audio(audio_data_np, target_db) for audio_data_np in ref_audio_data_np]
+    # com_audio_data_np = [preprocess_audio(audio_data_np, target_db) for audio_data_np in com_audio_data_np]   
     
     ####################
     # save log audio 
@@ -142,20 +146,22 @@ def check_matching():
     t = time.time()
     print("\n\nInference results:")
     print(f"Compare by pair: ", end='')
-    nom_confidence_scores, confidence_scores = compute_score_by_pair(model, ref_audio_data_np, com_audio_data_np,  
+    nom_confidence_scores, confidence_scores = compute_score_by_pair(speaker_model, ref_audio_data_np, com_audio_data_np,  
                                                                      threshold=threshold, base_threshold=base_threshold, 
-                                                                     eval_frames=eval_frames, num_eval=num_eval,
-                                                                     normalize=normalize, sr=sr, norm_mode=norm_mode)
+                                                                     num_eval=num_eval,
+                                                                     normalize=normalize, 
+                                                                     norm_mode=norm_mode)
     print(f"\\Score: {confidence_scores} -> {nom_confidence_scores} \\Total time: {round(time.time()-t, 4)}s")
     
     ######################
     # embed all and compare
     t = time.time()
     print(f"Compare by mean ref: ", end='')
-    norm_mean_emb_scores, mean_emb_scores = compute_score_by_mean_ref(model, ref_audio_data_np, com_audio_data_np, 
-                                                              threshold=threshold, base_threshold=base_threshold, 
-                                                              eval_frames=eval_frames, num_eval=num_eval,
-                                                              normalize=normalize, sr=sr, norm_mode=norm_mode)
+    norm_mean_emb_scores, mean_emb_scores = compute_score_by_mean_ref(speaker_model, ref_audio_data_np, com_audio_data_np, 
+                                                                      threshold=threshold, base_threshold=base_threshold, 
+                                                                      num_eval=num_eval,
+                                                                      normalize=normalize, 
+                                                                      norm_mode=norm_mode)
     
     print(f"\\Score: {mean_emb_scores} -> {norm_mean_emb_scores} \\Total time: {round(time.time()-t, 4)}s")
     
@@ -172,9 +178,9 @@ def check_matching():
     max_norm_mean_score = np.amax(norm_mean_emb_scores)
     mean_overall_score = np.mean([mean_confidence_scores, mean_mean_emb_scores])
     #
-    
+    # if mean of confidences scores of 3 pairs tests is greater than the based threshold, suppose to be verified
     final_score = np.amax(norm_score_lst) if (float(mean_confidence_scores) > threshold) else np.mean(norm_score_lst)
-#     final_score = np.mean(norm_score_lst)
+    # final_score = np.mean(norm_score_lst)
     ########################
     print('Verifed: ', end='')
     color = 'r' if not bool(final_score >= compare_threshold) else 'g'
@@ -228,7 +234,7 @@ def get_embeding():
     print("Save audio signal to file:", save_path, round(time.time() - t0, 2), 's')
 
     t0 = time.time()
-    emb = np.asarray(model.embed_utterance(audio_data_np, eval_frames=eval_frames, num_eval=num_eval, normalize=normalize, sr=sr))
+    emb = np.asarray(speaker_model.embed_utterance(audio_data_np, eval_frames=eval_frames, num_eval=num_eval, normalize=normalize, sr=sr))
     emb_json = json.dumps(emb.tolist())
     print("Inference time:", f"{time.time() - t0} sec", "|| Embeding size:", emb.shape)
 
@@ -243,4 +249,4 @@ def get_something():
 
 if __name__ == '__main__':
     #     app.run(debug=True)
-    app.run(debug=False, host='0.0.0.0', port=8111)
+    app.run(debug=True, host='0.0.0.0', port=8111)

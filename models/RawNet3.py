@@ -56,7 +56,7 @@ class RawNet3(nn.Module):
             attn_input = self.context_dim * 3
         else:
             attn_input = self.context_dim
-        print("self.encoder_type", self.encoder_type)
+        # print("self.encoder_type", self.encoder_type)
         if self.encoder_type == "ECA":
             attn_output = self.context_dim
         elif self.encoder_type == "ASP":
@@ -146,11 +146,17 @@ class RawNet3(nn.Module):
         return x
 
 
-def MainModel(**kwargs):
+def MainModel(nOut=512, model_scale=8, 
+              context=True, summed=True, 
+              out_bn=False, log_sinc=True,
+              norm_sinc="mean", grad_mult=1,
+              encoder_type='ASP', sinc_stride=10, **kwargs):
 
-    model = RawNet3(
-        Bottle2neck, model_scale=8, context=True, summed=True, out_bn=False, log_sinc=True, 
-        norm_sinc="mean", grad_mult=1, encoder_type='ASP', sinc_stride=10,
-        **kwargs
-    )
+    model = RawNet3(Bottle2neck, 
+                    model_scale=model_scale, 
+                    context=context, 
+                    summed=summed, out_bn=out_bn, 
+                    log_sinc=log_sinc, norm_sinc=norm_sinc, 
+                    grad_mult=grad_mult, encoder_type=encoder_type,
+                    sinc_stride=sinc_stride, nOut=nOut, **kwargs)
     return model

@@ -15,32 +15,6 @@ from utils import cprint
 from pydub import AudioSegment
 from processing.wav_conversion import normalize_audio_amp
 
-ref1 = "log_service/audio_bu/ref_bu/auth_ref/366524143/366524143-2022-03-15-08-34-14.wav"
-ref2 = "log_service/audio_bu/ref_bu/auth_ref/366524143/366524143-2022-03-15-08-34-25.wav"
-ref3 = "log_service/audio_bu/ref_bu/auth_ref/366524143/366524143-2022-03-15-08-34-39.wav"
-
-ref = ['log_service/audio_thudth1/audio_thudth1/ref_audio/988988883/988988883-2022-03-24-10-31-23.wav',
-       'log_service/audio_thudth1/audio_thudth1/ref_audio/988988883/988988883-2022-03-24-10-31-36.wav',
-       'log_service/audio_thudth1/audio_thudth1/ref_audio/988988883/988988883-2022-03-24-10-31-50.wav']
-
-ref_norm = ['log_service/audio_thudth1/audio_thudth1/ref_audio_norm/988988883/988988883-2022-03-24-10-31-23.wav',     
-            'log_service/audio_thudth1/audio_thudth1/ref_audio_norm/988988883/988988883-2022-03-24-10-31-36.wav',
-            'log_service/audio_thudth1/audio_thudth1/ref_audio_norm/988988883/988988883-2022-03-24-10-31-50.wav']
-
-com = ['log_service/audio_thudth1/audio_thudth1/logs/988988883/988988883-988988883-20220324-173219-2022-03-24-10-32-44.wav',
- 'log_service/audio_thudth1/audio_thudth1/logs/988988883/988988883-988988883-20220324-173219-2022-03-24-10-33-00.wav',
- 'log_service/audio_thudth1/audio_thudth1/logs/988988883/988988883-988988883-20220324-173219-2022-03-24-10-33-19.wav',
- 'log_service/audio_thudth1/audio_thudth1/logs/988988883/988988883-988988883-20220324-173219-2022-03-24-10-33-35.wav',
- 'log_service/audio_thudth1/audio_thudth1/logs/988988883/988988883-988988883-20220324-173219-2022-03-24-10-33-55.wav',
- 'log_service/audio_thudth1/audio_thudth1/logs/988988883/988988883-988988883-20220324-173219-2022-03-24-10-34-12.wav',]
-
-com_norm = ['log_service/audio_thudth1/audio_thudth1/logs/988988883/988988883-988988883-20220324-173219-2022-03-24-10-32-44_norm.wav',
- 'log_service/audio_thudth1/audio_thudth1/logs/988988883/988988883-988988883-20220324-173219-2022-03-24-10-33-00_norm.wav',
- 'log_service/audio_thudth1/audio_thudth1/logs/988988883/988988883-988988883-20220324-173219-2022-03-24-10-33-19_norm.wav',
- 'log_service/audio_thudth1/audio_thudth1/logs/988988883/988988883-988988883-20220324-173219-2022-03-24-10-33-35_norm.wav',
- 'log_service/audio_thudth1/audio_thudth1/logs/988988883/988988883-988988883-20220324-173219-2022-03-24-10-33-55_norm.wav',
- 'log_service/audio_thudth1/audio_thudth1/logs/988988883/988988883-988988883-20220324-173219-2022-03-24-10-34-12_norm.wav']
-
 
 URL = "http://0.0.0.0:8111/isMatched"  # http://10.254.136.107:8111/
 
@@ -126,16 +100,14 @@ if __name__ == '__main__':
     if args.com:
         coms = [args.com]
         
-    # test log
-#     for refs in [ref, ref_norm]:
-#         for coms in [com, com_norm]:
-#             print(refs, end=' vs ')
-#             for c in coms:
-#                 print(c)
-#                 get_response(refs, [c])
-    coms = ['log_service/unknown/Chau Anh (tin tuc).m4a', 'log_service/unknown/Chau Anh (tong dai).m4a', 'log_service/unknown/Master Hoai Thu.wav', 'log_service/unknown/Master Huyen Trang.wav', 'log_service/unknown/Master Thuy Linh.wav'] 
+    coms = [
+            'log_service/log_service_sv107/unknown/1_Khanh_An.wav',
+            'log_service/log_service_sv107/unknown/Chau Anh (tong dai).m4a', 
+            'log_service/log_service_sv107/unknown/Master Hoai Thu.wav', 
+            'log_service/log_service_sv107/unknown/Master Huyen Trang.wav', 
+            'log_service/log_service_sv107/unknown/Master Thuy Linh.wav'] 
     for c in  coms:
-        get_response(['log_service/unknown/1_Khanh_An.wav'], [c])
+        get_response(['log_service/log_service_sv107/unknown/Chau Anh (tin tuc).m4a'], [c])
     print('')
-#     get_response(refs, coms)
+    # get_response(refs, coms)
 ######################################################################

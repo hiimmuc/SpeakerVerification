@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from pydub import AudioSegment
 
-from model import SpeakerNet
+from model import SpeakerEncoder, WrappedModel, ModelHandling
 from utils import similarity_measure
 from processing.wav_conversion import (normalize_audio_amp, np_to_segment, segment_to_np)
 from processing.augment import gain_target_amplitude
@@ -40,7 +40,7 @@ def normalize_score(score, threshold, base_threshold=0.5, mode='linear'):
     return result
     
 
-def decode_audio(audio_data, sr, dtype_np=np.int16):
+def decode_audio(audio_data, audio_spec, dtype_np=np.int16):
     audio_data_bytes = audio_data.encode('utf-8') # string to bytes
     audio_data_b64 = base64.decodebytes(audio_data_bytes) # bytes to b64
     audio_data_np = np.frombuffer(audio_data_b64, dtype=dtype_np) #b 64 to np
@@ -56,16 +56,16 @@ def preprocess_audio(audio_data_np, target_volume=-10):
 
 def compute_score_by_mean_ref(model, ref_source, com_source, 
                               threshold=0.5, base_threshold=0.5,
-                              eval_frames=100, num_eval=20,normalize=True, sr=8000, 
+                              num_eval=20,normalize=True,
                               norm_mode='magic',**kwargs):
     """
     Predict new utterance based on distance between samples of com and ref.
     """   
     mean_scores = []
-    ref_emb = model.prepare(source=ref_source, save_path=None, prepare_type='embed', num_eval=num_eval, eval_frames=eval_frames).detach().cpu().numpy()
+    ref_emb = model.prepare(source=ref_source, save_path=None, prepare_type='embed', num_eval=num_eval).detach().cpu().numpy()
     
     for data_np_com in com_source:
-        com_emb = model.embed_utterance(data_np_com, num_eval=num_eval, eval_frames=eval_frames, normalize=normalize).detach().cpu().numpy()
+        com_emb = model.embed_utterance(data_np_com, num_eval=num_eval, normalize=normalize).detach().cpu().numpy()
         
         # dist = F.pairwise_distance(com_emb, ref_emb).detach().cpu().numpy()
         # mean_dist = np.mean(dist, axis=0)
@@ -89,10 +89,11 @@ def score_of_pair(ref_emb, com_emb, threshold=0.5, base_threshold=0.5, norm_mode
                                  mode=norm_mode)
     return score_norm, score
 
-def compute_score_by_pair(model, com_source, ref_source, 
+def compute_score_by_pair(model,  
+                          com_source, ref_source, 
+                          num_eval=20,
                           threshold=0.5, base_threshold=0.5,
-                          eval_frames=100, num_eval=20,normalize=True, sr=8000, 
-                          norm_mode='magic', **kwargs):
+                          normalize=True, norm_mode='magic', **kwargs):
     '''
     return max score of all pair test
     '''
@@ -101,10 +102,9 @@ def compute_score_by_pair(model, com_source, ref_source,
     for audio_data_np in ref_source:
         # get embedding
         # t0 = time.time()
-        emb = np.asarray(model.embed_utterance(audio_data_np, 
-                                               eval_frames=eval_frames, 
+        emb = np.asarray(model.embed_utterance(audio_data_np,
                                                num_eval=num_eval, 
-                                               normalize=normalize, sr=sr))
+                                               normalize=normalize))
         # print("Embedding time:", time.time() - t0)
         embedding_ref.append(emb)
 
@@ -112,10 +112,9 @@ def compute_score_by_pair(model, com_source, ref_source,
     for audio_data_np in com_source:
         # get embedding
         # t0 = time.time()
-        emb = np.asarray(model.embed_utterance(audio_data_np, 
-                                               eval_frames=eval_frames, 
+        emb = np.asarray(model.embed_utterance(audio_data_np,
                                                num_eval=num_eval, 
-                                               normalize=normalize, sr=sr))
+                                               normalize=normalize))
         # print("Embedding time:", time.time() - t0)
         embedding_com.append(emb)
 

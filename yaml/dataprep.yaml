@@ -12,7 +12,7 @@
 ###
 
 device: "cuda"
-seed: 20220709
+seed: 1
 
 ## Directories
 output_folder: !ref backup/<seed>
@@ -29,7 +29,7 @@ valid_annotation: !ref <save_folder>/metadata/dev.csv
 # test callbot: dataset/test_data/test_callbot_raw/test_cb_v1_changepath.txt
 # test thuc te: log_service/check_log_combine/equitable_test_truth.txt
 evaluation_file: dataset/test_data/test_callbot_raw/test_cb_v1_changepath.txt
-verification_file: log_service/real_evn_trial_change_path_test.txt
+verification_file: log_service/check_log_combine/equitable_test.txt
 noise_folder: dataset/augment_data
 
 ckpt_interval_minutes: -1 # save checkpoint every N min, -1 to turn off
@@ -38,7 +38,7 @@ save_model_last: True
 ## Training parameters
 number_of_epochs: 250 # max_epoch
 batch_size: 64 # batch_size
-lr: 0.006
+lr: 0.001
 base_lr: 0.00000001 # min_lr
 max_lr: !ref <lr> # max lr for callbacks
 step_size: 10 # depends on the callbacks, step size equal [2, 4, 6, 8] * len(train dataset) / (batch_size * n_pgu * n_spk)
@@ -52,8 +52,8 @@ nClasses: 13103 #  > 40 18880 > 100 7907 test system 100
 dataloader_options:
   batch_size: !ref <batch_size>
   shuffle: !ref <shuffle>
-  num_workers: 8
-  max_seg_per_spk: 1000
+  num_workers: 16
+  max_seg_per_spk: 500
   nPerSpeaker: 2
   split_ratio: -1
 
@@ -73,9 +73,9 @@ lib: nnaudio
 
 ## Model definition
 model:
-  name: Tita_ECAPA
+  name: Raw_ECAPA_sinc_gru
   feature_type: !ref <features>
-  nOut: 384 #lin neurons
+  nOut: 512 #lin neurons
   
 # model:
 #   name: [RawNet2v2, ECAPA_TDNN]
@@ -114,9 +114,9 @@ es_patience: 15
 
 ## Using pretrain
 pretrained:
-  use: False
-  # path: backup/1001/Raw_ECAPA/ARmSoftmax/model/best_state_top4_copy_1.pt
-  path: !ref <save_folder>/<model[name]>/<criterion[name]>/model/best_state.pt 
+  use: True
+  path: backup/1001/Raw_ECAPA/ARmSoftmax/model/best_state_top4_copy_1.pt
+  # path: !ref <save_folder>/<model[name]>/<criterion[name]>/model/best_state.pt   # backup/1001/Raw_ECAPA/ARmSoftmax/model/best_state_top4.pt
   
 ## Augment options
 augment: False
