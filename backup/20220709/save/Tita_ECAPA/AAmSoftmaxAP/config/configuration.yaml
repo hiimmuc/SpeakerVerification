@@ -1,0 +1,166 @@
+###
+# things must change:
+# - seed
+# - model
+#     - name
+#     - nOut
+# - features
+# - nClasses
+# - callbacks
+# - optimizer
+# - criterion
+###
+
+device: "cuda"
+seed: 20220709
+
+## Directories
+output_folder: !ref backup/<seed>
+save_folder: !ref <output_folder>/save
+train_log: !ref <output_folder>/train_log.txt
+
+## Paths
+skip_prep: True
+data_folder: dataset/train_data/viettel_cskh_callbot
+train_annotation: !ref <save_folder>/metadata/train.csv
+valid_annotation: !ref <save_folder>/metadata/dev.csv
+## sample path for testin
+# test gan nhan: dataset/test_data/test_cskh_labeled/test_cskh_trial_file.txt
+# test callbot: dataset/test_data/test_callbot_raw/test_cb_v1_changepath.txt
+# test thuc te: log_service/check_log_combine/equitable_test_truth.txt
+evaluation_file: dataset/test_data/test_callbot_raw/test_cb_v1_changepath.txt
+verification_file: log_service/real_evn_trial_change_path_test.txt
+noise_folder: dataset/augment_data
+
+ckpt_interval_minutes: -1 # save checkpoint every N min, -1 to turn off
+save_model_last: True
+
+## Training parameters
+number_of_epochs: 250 # max_epoch
+batch_size: 64 # batch_size
+lr: 0.006
+base_lr: 0.00000001 # min_lr
+max_lr: !ref <lr> # max lr for callbacks
+step_size: 10 # depends on the callbacks, step size equal [2, 4, 6, 8] * len(train dataset) / (batch_size * n_pgu * n_spk)
+shuffle: False
+random_chunk: True
+
+## Number of speakers
+nClasses: 13103 #  > 40 18880 > 100 7907 test system 100
+
+## dataloader_options
+dataloader_options:
+  batch_size: !ref <batch_size>
+  shuffle: !ref <shuffle>
+  num_workers: 8
+  max_seg_per_spk: 1000
+  nPerSpeaker: 2
+  split_ratio: -1
+
+## Audio parameters
+audio_spec:
+  sample_rate: 8000 # sample_rate
+  channels: 1
+  sentence_len: 2.0 # seconds max_frames
+  win_len: 0.025
+  hop_len: 0.01 # Hop length is the length of the non-intersecting portion of window length
+
+## Feature parameters
+n_mfcc: 80
+n_mels: 80
+features: melspectrogram
+lib: nnaudio
+
+## Model definition
+model:
+  name: Tita_ECAPA
+  feature_type: !ref <features>
+  nOut: 384 #lin neurons
+  
+# model:
+#   name: [RawNet2v2, ECAPA_TDNN]
+#   feature_type: [raw, mfcc]
+#   nOut: [320, 192] #lin neurons
+
+classifier:
+  input_size: !ref <model[nOut]>
+  out_neurons: !ref <nClasses>
+
+## criterion
+criterion:
+  name: AAmSoftmaxAP
+  margin: 0.2
+  scale: 30
+  hard_prob: 0.5
+  hard_rank: 0.5
+  scale_pos: 2.0
+  scale_neg: 50.0
+
+## optimizer
+optimizer:
+  name: AdaBelief
+  weight_decay: 0.00002
+  lr_decay: 0.95
+
+## callbacks
+callbacks:
+  name: cosine_annealinglr_pt
+  base_lr: !ref <base_lr>
+  max_lr: !ref <max_lr>
+  # step_size: !ref <step_size>
+
+early_stopping: False
+es_patience: 15
+
+## Using pretrain
+pretrained:
+  use: False
+  # path: backup/1001/Raw_ECAPA/ARmSoftmax/model/best_state_top4_copy_1.pt
+  path: !ref <save_folder>/<model[name]>/<criterion[name]>/model/best_state.pt 
+  
+## Augment options
+augment: False
+augment_options:
+  augment_paths:
+    musan: !ref <noise_folder>/musan_split
+    noise_vad: !ref <noise_folder>/noise_vad
+    rirs: !ref <noise_folder>/RIRS_NOISES
+  augment_chain: ["env_corrupt", "time_domain"] # available: ["env_corrupt", "time_domain", "spec_domain"]
+  noise_sets: ["noise", "speech", "music", "noise_vad", "noise_rirs"]
+  noise_proportion: [0.2, 0.1, 0.2, 0.25, 0.25]
+  noise_snr:
+    noise: [0, 5]
+    speech: [3, 20]
+    music: [5, 15]
+    noise_vad: [0, 15]
+    noise_rirs: [0, 15]
+  noise_samples:
+    noise: [1, 1]
+    speech: [3, 7]
+    music: [1, 1]
+    noise_vad: [1, 1]
+    noise_rirs: [1, 1]
+  augment_time_domain:
+    volume: 6
+    speed: [0.95, 1.05]
+    pitch: [-0.5, 0.5]
+    proportion: [0.25, 0.25, 0.25]
+    combined: False
+
+## testing
+test_interval: -1
+dcf:
+  dcf_p_target: 0.05
+  dcf_c_miss: 1
+  dcf_c_fa: 1
+num_eval: 20
+prepare: embed # 'embed / cohorts'
+cohort_size: !ref <nClasses> * 3
+test_threshold: 0
+scoring_mode: cosine
+log_test_files:
+  ref: !ref log_service/check_log_combine/equitable_test_truth.txt
+  com: !ref log_service/check_log_combine/equitable_test_results.txt
+# initial_model test:
+initial_model_infer: !ref <pretrained[path]>
+cohorts_path: !ref <save_folder>/cohort_<model[name]>.np
