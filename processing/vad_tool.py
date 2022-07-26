@@ -159,7 +159,7 @@ class VAD:
         if voiced_frames:
             yield b''.join([f.bytes for f in voiced_frames])
 
-    def detect(self, audio_path, write=True, overwrite=False, show=False):
+    def detect(self, audio_path, write=True, overwrite=False, show=False, duration_min=1.5):
         if not os.path.exists(audio_path):
             raise "Path is not existed"
         audio, sample_rate = read_wave(audio_path)
@@ -171,7 +171,7 @@ class VAD:
 
         if write:
             for i, segment in enumerate(segments):
-                if len(segment) / sample_rate >= 1.0:
+                if len(segment) / sample_rate >= duration_min:
                     path = f"{audio_path.replace('.wav', '')}_vad_{i}.wav"
                     write_wave(path, segment, sample_rate)
 
