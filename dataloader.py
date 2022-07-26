@@ -1,20 +1,19 @@
+import argparse
+import csv
 import math
 import os
-import csv
-import argparse
-import time
 import random
+import time
+from pathlib import Path
 
 import numpy as np
-
 import torch
-from torch.utils.data import DataLoader, Dataset
 import torch.distributed as dist
-
-from processing.audio_loader import loadWAV, AugmentWAV
-from utils import read_config
-from pathlib import Path
+from torch.utils.data import DataLoader, Dataset
 from tqdm.auto import tqdm
+
+from processing.audio_loader import AugmentWAV, loadWAV
+from utils import read_config
 
 
 def round_down(num, divisor):
@@ -26,6 +25,7 @@ def round_down(num, divisor):
 # def worker_init_fn(worker_id):
 #     np.random.seed(np.random.get_state()[1][0] + worker_id)
 
+
 def worker_init_fn(worker_id):
     """
     Create the init fn for worker id
@@ -34,7 +34,7 @@ def worker_init_fn(worker_id):
     random.seed(torch_seed + worker_id)
     if torch_seed >= 2**30:  # make sure torch_seed + workder_id < 2**32
         torch_seed = torch_seed % (2**30)
-    np.random.seed(torch_seed + worker_id)    
+    np.random.seed(torch_seed + worker_id)
 
 
 class TrainLoader(Dataset):
