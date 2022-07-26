@@ -16,7 +16,7 @@ from zipfile import ZipFile
 import numpy as np
 import soundfile as sf
 from scipy.io import wavfile
-from tqdm.auto import tqdm
+from tqdm import tqdm
 
 from processing.audio_loader import AugmentWAV, loadWAV
 from processing.dataset import get_audio_properties, read_blacklist
@@ -63,8 +63,35 @@ def download(args, lines):
                               shell=True)
         if out != 0:
             raise ValueError(
+<<<<<<< HEAD
+                'Download failed %s. If download fails repeatedly, use alternate URL on the VoxCeleb website.' % url)
+
+        # Check MD5
+        md5ck = md5('%s/%s' % (args.save_path, outfile))
+        if md5ck == md5gt:
+            print('Checksum successful %s.' % outfile)
+        else:
+            raise Warning('Checksum failed %s.' % outfile)
+
+# ========== ===========
+# Concatenate file parts
+# ========== ===========
+
+
+def concatenate(args, lines):
+
+    for line in tqdm(lines):
+        infile = line.split()[0]
+        outfile = line.split()[1]
+        md5gt = line.split()[2]
+
+        # Concatenate files
+        out = subprocess.call(
+            'cat %s/%s > %s/%s' % (args.save_path, infile, args.save_path, outfile), shell=True)
+=======
                 'Download failed %s. If download fails repeatedly, use alternate URL on the VoxCeleb website.'
                 % url)
+>>>>>>> 2f1a607f970e01c519951f8b480cf0f504ea9e71
 
         # Check MD5
         md5ck = md5('%s/%s' % (args.save_path, outfile))
@@ -96,6 +123,34 @@ def part_extract(args, fname, target):
         for infile in zf.namelist():
             if any([infile.startswith(x) for x in target]):
                 zf.extract(infile, args.save_path)
+<<<<<<< HEAD
+            # pdb.set_trace()
+            # zf.extractall(args.save_path)
+
+# ========== ===========
+# Convert
+# ========== ===========
+
+
+def convert_voxceleb(args):
+    # dataset/train_data/VoxCeleb/ voxceleb2/id00012/_raOc3-IRsw/00110.m4a
+    files = list(tqdm(glob.glob('%s/voxceleb2/*/*/*.m4a' %
+                 args.save_path), desc='Getting audio paths'))
+    files.sort()
+
+    print('Converting files from AAC to WAV')
+    for fname in tqdm(files):
+        outfile = fname.replace('.m4a', '.wav')
+        out = subprocess.call(
+            'ffmpeg -y -i %s -ac 1 -vn -acodec pcm_s16le -ar 16000 %s >/dev/null 2>/dev/null' % (fname, outfile), shell=True)
+        if out != 0:
+            raise ValueError('Conversion failed %s.' % fname)
+
+# ========== ===========
+# Split MUSAN for faster random access
+# ========== ===========
+=======
+>>>>>>> 2f1a607f970e01c519951f8b480cf0f504ea9e71
 
 
 def split_musan(args):
@@ -446,6 +501,24 @@ except:
 
 parser = argparse.ArgumentParser(description="Data preparation")
 if __name__ == '__main__':
+<<<<<<< HEAD
+    # ========== ===========
+    # Parse input arguments
+    # ========== ===========
+    parser = argparse.ArgumentParser(description="VoxCeleb downloader")
+
+    parser.add_argument('--save_path', 	type=str,
+                        default="dataset/train_data/VoxCeleb", help='Target directory')
+    parser.add_argument('--user', 		type=str, default="user", help='Username')
+    parser.add_argument('--password', 	type=str,
+                        default="pass", help='Password')
+
+    parser.add_argument('--download', dest='download',
+                        action='store_true', help='Enable download')
+    parser.add_argument('--extract', dest='extract',
+                        action='store_true', help='Enable extract')
+=======
+>>>>>>> 2f1a607f970e01c519951f8b480cf0f504ea9e71
     # YAML
     parser.add_argument('--config', type=str, default=None)
     ##
@@ -506,6 +579,38 @@ if __name__ == '__main__':
         args = read_config(args.config, args)
         args = argparse.Namespace(**args)
 
+<<<<<<< HEAD
+    if args.augment:
+        download(args, augfiles)
+        part_extract(args, os.path.join(args.save_path, 'rirs_noises.zip'), [
+                     'RIRS_NOISES/simulated_rirs/mediumroom', 'RIRS_NOISES/simulated_rirs/smallroom'])
+        full_extract(args, os.path.join(args.save_path, 'musan.tar.gz'))
+        split_musan(args)
+        # augmentation(
+        #     args=args, audio_paths=data_generator.spkID_list, step_save=100, mode=args.augment_mode)
+
+    if args.download:
+        download(args, fileparts)
+
+    if args.extract:
+        concatenate(args, files)
+        for file in tqdm(files):
+            full_extract(args, os.path.join(args.save_path, file.split()[1]))
+        out = subprocess.call('mv %s/dev/aac/* %s/aac/ && rm -r %s/dev' %
+                              (args.save_path, args.save_path, args.save_path), shell=True)
+        out = subprocess.call('mv %s/wav %s/voxceleb1' %
+                              (args.save_path, args.save_path), shell=True)
+        out = subprocess.call('mv %s/dev/aac %s/voxceleb2' %
+                              (args.save_path, args.save_path), shell=True)
+
+    if args.convert:
+        print('Converting...')
+        convert_voxceleb(args)
+
+    # if args.convert:
+    #     data_generator.convert()
+    data_generator = DataGenerator(args)
+=======
     data_generator = DataGenerator(args)
     print('Start processing...')
 
@@ -515,6 +620,7 @@ if __name__ == '__main__':
         prepare_augmentation(args)
     if args.convert:
         data_generator.convert()
+>>>>>>> 2f1a607f970e01c519951f8b480cf0f504ea9e71
     if args.generate:
         data_generator.generate_metadata(
             num_spks=args.num_spks, lower_num=args.lower_num, upper_num=args.upper_num)
