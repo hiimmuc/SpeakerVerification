@@ -30,7 +30,7 @@ valid_annotation: !ref <save_folder>/metadata/dev.csv
 # test thuc te: log_service/check_log_combine/equitable_test_truth.txt
 evaluation_file: dataset/test_data/test_callbot_raw/test_cb_v1_changepath.txt
 verification_file: log_service/real_evn_trial_change_path_test.txt
-noise_folder: dataset/augment_data
+noise_folder: dataset/augment_data/16kHz
 
 ckpt_interval_minutes: -1 # save checkpoint every N min, -1 to turn off
 save_model_last: True

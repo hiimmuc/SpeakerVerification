@@ -17,7 +17,7 @@ from zipfile import ZipFile
 import numpy as np
 import soundfile as sf
 from scipy.io import wavfile
-from tqdm.auto import tqdm
+from tqdm import tqdm
 
 from processing.audio_loader import AugmentWAV, loadWAV
 from processing.dataset import get_audio_properties, read_blacklist
@@ -69,7 +69,7 @@ def download(args, lines):
 
 def concatenate(args, lines):
 
-    for line in lines:
+    for line in tqdm(lines):
         infile = line.split()[0]
         outfile = line.split()[1]
         md5gt = line.split()[2]
@@ -124,7 +124,9 @@ def part_extract(args, fname, target):
 
 
 def convert_voxceleb(args):
-    files = glob.glob('%s/voxceleb2/*/*/*.m4a' % args.save_path)
+    # dataset/train_data/VoxCeleb/ voxceleb2/id00012/_raOc3-IRsw/00110.m4a
+    files = list(tqdm(glob.glob('%s/voxceleb2/*/*/*.m4a' %
+                 args.save_path), desc='Getting audio paths'))
     files.sort()
 
     print('Converting files from AAC to WAV')
@@ -508,7 +510,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--download', dest='download',
                         action='store_true', help='Enable download')
-
+    parser.add_argument('--extract', dest='extract',
+                        action='store_true', help='Enable extract')
     # YAML
     parser.add_argument('--config', type=str, default=None)
     ##
@@ -585,16 +588,14 @@ if __name__ == '__main__':
         args = read_config(args.config, args)
         args = argparse.Namespace(**args)
 
-    data_generator = DataGenerator(args)
-
     if args.augment:
         download(args, augfiles)
         part_extract(args, os.path.join(args.save_path, 'rirs_noises.zip'), [
                      'RIRS_NOISES/simulated_rirs/mediumroom', 'RIRS_NOISES/simulated_rirs/smallroom'])
         full_extract(args, os.path.join(args.save_path, 'musan.tar.gz'))
         split_musan(args)
-        augmentation(
-            args=args, audio_paths=data_generator.spkID_list, step_save=100, mode=args.augment_mode)
+        # augmentation(
+        #     args=args, audio_paths=data_generator.spkID_list, step_save=100, mode=args.augment_mode)
 
     if args.download:
         download(args, fileparts)
@@ -611,10 +612,12 @@ if __name__ == '__main__':
                               (args.save_path, args.save_path), shell=True)
 
     if args.convert:
+        print('Converting...')
         convert_voxceleb(args)
 
     # if args.convert:
     #     data_generator.convert()
+    data_generator = DataGenerator(args)
     if args.generate:
         data_generator.generate_metadata(
             num_spks=args.num_spks, lower_num=args.lower_num, upper_num=args.upper_num)
