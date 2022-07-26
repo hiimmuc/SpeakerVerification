@@ -505,6 +505,7 @@ class ModelHandling(object):
             feats[filename] = ref_feat
 
         # Read files and compute all scores
+        results = []
         with open(write_file, 'w', newline='') as wf:
             spamwriter = csv.writer(wf, delimiter=',')
             spamwriter.writerow(['audio_1', 'audio_2', 'pred_label' , 'score'])
@@ -535,6 +536,8 @@ class ModelHandling(object):
 
                 pred = '1' if score >= thresh_score else '0'
                 spamwriter.writerow([data[0], data[1], pred, score])
+                results.append(f"{str(Path(data[0]).name)},{str(Path(data[1]).name)},{score}")
+        return results
    
     ## ===== ===== ===== ===== ===== ===== ===== =====
     ## preparing the cohort or embeddings of multiple utterances

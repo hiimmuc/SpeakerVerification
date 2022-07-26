@@ -213,23 +213,29 @@ def inference(args):
                   f">> F-score {result['prec_recall'][2]}% at threshold {result['prec_recall'][-1]}\n")
             threshold_set =  result['gmean'][-1]
             
-        speaker_model.testFromList(args.verification_file,
-                                   thresh_score=threshold_set,
-                                   output_file=args.log_test_files['com'],
-                                   distributed=args.distributed,
-                                   dataloader_options=args.dataloader_options,
-                                   cohorts_path=args.cohorts_path,
-                                   num_eval=args.num_eval,
-                                   scoring_mode=scoring_mode)
-
-        roc, prec_recall = evaluate_result(path=args.log_test_files['com'], ref=args.log_test_files['ref'])
-        test_log_file.writelines([f">{time.strftime('%Y-%m-%d %H:%M:%S')}<",
-                                  f"Test result on: [{args.verification_file}] with [{args.initial_model_infer}]\n",
-                                  f"Threshold: {threshold_set}\n",
-                                  f"ROC: {roc}\n",
-                                  f"Report: \n{prec_recall}\n",
-                                  f"Save to {args.log_test_files['com']} and {args.log_test_files['ref']} \n========================================\n"])
-        test_log_file.close()
+        res = speaker_model.testFromList(args.verification_file,
+                                         thresh_score=threshold_set,
+                                         output_file=args.log_test_files['com'],
+                                         distributed=args.distributed,
+                                         dataloader_options=args.dataloader_options,
+                                         cohorts_path=args.cohorts_path,
+                                         num_eval=args.num_eval,
+                                         scoring_mode=scoring_mode)
+        with open(os.path.join(result_save_path, 'results.txt'), 'w') as wf:
+            for line in res:
+                wf.write(str(line) + '\n')
+                
+        try:
+            roc, prec_recall = evaluate_result(path=args.log_test_files['com'], ref=args.log_test_files['ref'])
+            test_log_file.writelines([f">{time.strftime('%Y-%m-%d %H:%M:%S')}<",
+                                      f"Test result on: [{args.verification_file}] with [{args.initial_model_infer}]\n",
+                                      f"Threshold: {threshold_set}\n",
+                                      f"ROC: {roc}\n",
+                                      f"Report: \n{prec_recall}\n",
+                                      f"Save to {args.log_test_files['com']} and {args.log_test_files['ref']} \n========================================\n"])
+            test_log_file.close()
+        except:
+            pass
         sys.exit(1)
 
     # Prepare embeddings for cohorts/verification
