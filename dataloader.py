@@ -63,7 +63,7 @@ class TrainLoader(Dataset):
 
         if self.augment and ('env_corrupt' in self.augment_chain):
 
-            if all(os.path.exists(Path(path)) for path in self.augment_paths.values()):
+            if any(os.path.exists(Path(path)) for path in self.augment_paths.values()):
                 self.augment_engine = AugmentWAV(
                     augment_options, audio_spec, target_db=None)
             else:
