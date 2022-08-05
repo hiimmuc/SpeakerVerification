@@ -5,7 +5,7 @@ from export import *
 from inference import inference
 from dataprep import DataGenerator
 from trainer import train
-from utils import read_config
+from utils import read_config, get_sys_information
 
 
 def main(args):
@@ -23,8 +23,9 @@ def main(args):
 
         else:
             raise 'Wrong main mode, available: do_train, do_infer, do_export'
-    except KeyboardInterrupt: 
-        os.system("kill $(ps aux | grep 'main.py' | grep -v grep | awk '{print $2}')")
+    except KeyboardInterrupt:
+        os.system(
+            "kill $(ps aux | grep 'main.py' | grep -v grep | awk '{print $2}')")
         sys.exit(1)
 
 
@@ -33,6 +34,7 @@ parser = argparse.ArgumentParser(description="SpeakerNet")
 if __name__ == '__main__':
     # YAML
     parser.add_argument('--config', type=str, default=None)
+    parser.add_argument('--sys_info', action='store_true', default=False)
 
     # control flow
     parser.add_argument('--do_train', action='store_true', default=False)
@@ -131,11 +133,13 @@ if __name__ == '__main__':
 
     # Run
     n_gpus = torch.cuda.device_count()
-    
+
     print('Seed:', args.seed)
     print('Python Version:', sys.version)
     print('PyTorch Version:', torch.__version__)
     print('Number of GPUs:', torch.cuda.device_count())
+    if args.sys_info:
+        get_sys_information()
 
     main(args)
 

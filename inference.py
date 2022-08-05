@@ -16,7 +16,7 @@ from model import SpeakerEncoder, WrappedModel, ModelHandling
 from sklearn.metrics import (accuracy_score, classification_report,
                              confusion_matrix, fbeta_score, roc_curve)
 from tqdm import tqdm
-from utils import ComputeErrorRates, ComputeMinDcf, tuneThresholdfromScore
+from utils import ComputeErrorRates, ComputeMinDcf, tuneThresholdfromScore, plot_cm
 
 # ---------------------------------//
 # Evaluation code - must run on single GPU
@@ -24,9 +24,9 @@ from utils import ComputeErrorRates, ComputeMinDcf, tuneThresholdfromScore
 
 def inference(args):
     net = WrappedModel(SpeakerEncoder(**vars(args)))
-       
+
     max_iter_size = args.step_size
-    
+
     speaker_model = ModelHandling(
         net, **dict(vars(args), T_max=max_iter_size))
 
@@ -97,6 +97,7 @@ def inference(args):
 
         target_fa = np.linspace(5, 0, num=50)
 
+        # Results form:
         # results['gmean'] = [idxG, gmean[idxG], thresholds[idxG]]
         # results['roc'] = [tunedThreshold, eer, metrics.auc(fpr, tpr), optimal_threshold]
         # results['prec_recall'] = [precision, recall, fscore[ixPR], thresholds_[ixPR]]
@@ -137,7 +138,7 @@ def inference(args):
         write_file = Path(result_save_path, 'evaluation_results.csv')
         fa_pairs = []
         fr_pairs = []
-        
+
         with open(write_file, 'w', newline='') as wf:
             spamwriter = csv.writer(wf, delimiter=',')
             spamwriter.writerow(
@@ -153,19 +154,19 @@ def inference(args):
                     fr_pairs.append(f"{com},{ref},{score}\n")
                 if int(label) == 0 and int(label) != pred:
                     # False accepted
-                    fa_pairs.append(f"{com},{ref},{score}\n")                
+                    fa_pairs.append(f"{com},{ref},{score}\n")
 
             # print out metrics results
             beta_values = [0.5, 2]
             prec_recall = evaluate_by_precision_recall(
-                lab, preds, beta_values=beta_values)
+                lab, preds, beta_values=beta_values, save_cm=str(Path(result_save_path, 'confusion_matrix.png')))
             print("REPORT:\n", prec_recall[0])
             print("Accuracy for each class:",
                   f"\n0's: {prec_recall[1][0]}\n1's: {prec_recall[1][1]}")
             for b in beta_values:
                 print(f"F-{b}:", prec_recall[2][b])
-                
-        ## print out false pairs
+
+        # print out false pairs
         with open(Path(result_save_path, 'false_rejected_pairs.txt'), 'w') as wf:
             wf.writelines(fr_pairs)
         with open(Path(result_save_path, 'false_accepted_pairs.txt'), 'w') as wf:
@@ -211,8 +212,8 @@ def inference(args):
                   f">> EER {result['roc'][1]}% at threshold {result['roc'][-1]}\n",
                   f">> Gmean result: \n>>> EER: {(1 - result['gmean'][1]) * 100}% at threshold {result['gmean'][2]}\n>>> ACC: {result['gmean'][1] * 100}%\n",
                   f">> F-score {result['prec_recall'][2]}% at threshold {result['prec_recall'][-1]}\n")
-            threshold_set =  result['gmean'][-1]
-            
+            threshold_set = result['gmean'][-1]
+
         res = speaker_model.testFromList(args.verification_file,
                                          thresh_score=threshold_set,
                                          output_file=args.log_test_files['com'],
@@ -224,9 +225,10 @@ def inference(args):
         with open(os.path.join(result_save_path, 'results.txt'), 'w') as wf:
             for line in res:
                 wf.write(str(line) + '\n')
-                
+
         try:
-            roc, prec_recall = evaluate_result(path=args.log_test_files['com'], ref=args.log_test_files['ref'])
+            roc, prec_recall = evaluate_result(
+                path=args.log_test_files['com'], ref=args.log_test_files['ref'])
             test_log_file.writelines([f">{time.strftime('%Y-%m-%d %H:%M:%S')}<",
                                       f"Test result on: [{args.verification_file}] with [{args.initial_model_infer}]\n",
                                       f"Threshold: {threshold_set}\n",
@@ -234,17 +236,18 @@ def inference(args):
                                       f"Report: \n{prec_recall}\n",
                                       f"Save to {args.log_test_files['com']} and {args.log_test_files['ref']} \n========================================\n"])
             test_log_file.close()
-        except:
+        except Exception as e:
+            print(e)
             pass
         sys.exit(1)
 
     # Prepare embeddings for cohorts/verification
     if args.prepare is True:
         speaker_model.prepare(eval_frames=args.eval_frames,
-                      source=args.train_annotation,
-                      save_path=args.cohorts_path,
-                      num_eval=num_eval,
-                      prepare_type=args.prepare_type)
+                              source=args.train_annotation,
+                              save_path=args.cohorts_path,
+                              num_eval=num_eval,
+                              prepare_type=args.prepare_type)
         sys.exit(1)
 
     # Predict
@@ -281,9 +284,9 @@ def inference(args):
         diff_biggest_score = 0
         for f in tqdm(files):
             embed = speaker_model.embed_utterance(f,
-                                          eval_frames=args.eval_frames,
-                                          num_eval=num_eval,
-                                          normalize=speaker_model.__L__.test_normalize)
+                                                  eval_frames=args.eval_frames,
+                                                  num_eval=num_eval,
+                                                  normalize=speaker_model.__L__.test_normalize)
             embed = embed.unsqueeze(-1)
             dist = F.pairwise_distance(embed, embeds).detach().cpu().numpy()
             dist = np.mean(dist, axis=0)
@@ -327,7 +330,8 @@ def inference(args):
 def evaluate_result(path="backup/Raw_ECAPA/result/private_test_results.txt",
                     ref="log_service/test_lst_truth.txt"):
     com = path
-    assert os.path.isfile(ref) and os.path.isfile(com), f"Files not exists {ref} or {com}"
+    assert os.path.isfile(ref) and os.path.isfile(
+        com), f"Files not exists {ref} or {com}"
 
     ref_data = {}
     com_data = {}
@@ -367,7 +371,7 @@ def evaluate_result(path="backup/Raw_ECAPA/result/private_test_results.txt",
     # Precision-Recall
     beta_values = [0.5, 2]
     prec_recall = evaluate_by_precision_recall(
-        list(ref_data.values()), list(com_data.values()), beta_values=[0.5, 2])
+        list(ref_data.values()), list(com_data.values()), beta_values=[0.5, 2], save_cm=str(Path(path).parent / 'confusion_matrix.png'))
     print("Precision-Recall evaluation:\n", prec_recall[0])
     print("Accuracy for each class:",
           f"\n0's: {prec_recall[1][0]}\n1's: {prec_recall[1][1]}")
@@ -377,7 +381,7 @@ def evaluate_result(path="backup/Raw_ECAPA/result/private_test_results.txt",
     return confussion_roc_matrix, prec_recall[0]
 
 
-def evaluate_by_precision_recall(y_true, y_pred, beta_values=[1]):
+def evaluate_by_precision_recall(y_true, y_pred, beta_values=[1], save_cm=None):
     target_names = ["Label '0'", "Label '1'"]
     # get classification report
     report = classification_report(
@@ -392,7 +396,10 @@ def evaluate_by_precision_recall(y_true, y_pred, beta_values=[1]):
     # The diagonal entries are the accuracies of each class
     accuracy_per_classes = cm.diagonal()
 
-    # calcualte f_beta
+    if save_cm is not None:
+        plot_cm(y_true, y_pred, figsize=(12, 10), save_file=save_cm)
+
+    # calculate f_beta
     fb_scores = {}
     for b in beta_values:
         fb_score = fbeta_score(y_true, y_pred, beta=b, pos_label=1)

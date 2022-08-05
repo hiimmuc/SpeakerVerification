@@ -3,21 +3,20 @@ import csv
 import glob
 import hashlib
 import os
-import pdb
+
 import random
-import shutil
 import subprocess
 import tarfile
-import time
-from email.mime import audio
+
 from pathlib import Path
-from typing import SupportsRound
 from zipfile import ZipFile
 
 import numpy as np
 import soundfile as sf
 from scipy.io import wavfile
+from pydub import AudioSegment
 from tqdm import tqdm
+from multiprocessing import Pool
 
 from processing.audio_loader import AugmentWAV, loadWAV
 from processing.dataset import get_audio_properties, read_blacklist
@@ -25,35 +24,47 @@ from processing.wav_conversion import convert_audio_shell
 from utils import read_config
 
 
-# ========== ===========
-# MD5SUM
-# ========== ===========
-def md5(fname):
+def get_audio_path(folder):
+    """
+    Get the audio path for a given folder
 
+    Args:
+        folder ([type]): [description]
+
+    Returns:
+        list: [description]
+    """
+    return glob.glob(os.path.join(folder, '*.wav'))
+
+
+def md5(fname):
+    """
+    MD5SUM
+    """
     hash_md5 = hashlib.md5()
     with open(fname, "rb") as f:
         for chunk in iter(lambda: f.read(4096), b""):
             hash_md5.update(chunk)
     return hash_md5.hexdigest()
 
-# ========== ===========
-# Download with wget
-# ========== ===========
-
 
 def download(args, lines):
-
+    """
+    Download with wget
+    """
     for line in lines:
         url = line.split()[0]
         md5gt = line.split()[1]
         outfile = url.split('/')[-1]
 
         # Download files
-        out = subprocess.call('wget %s --user %s --password %s -O %s/%s' %
-                              (url, args.user, args.password, args.save_path, outfile), shell=True)
+        out = subprocess.call('wget %s -O %s/%s' %
+                              (url, args.save_path, outfile),
+                              shell=True)
         if out != 0:
             raise ValueError(
-                'Download failed %s. If download fails repeatedly, use alternate URL on the VoxCeleb website.' % url)
+                'Download failed %s. If download fails repeatedly, use alternate URL on the VoxCeleb website.'
+                % url)
 
         # Check MD5
         md5ck = md5('%s/%s' % (args.save_path, outfile))
@@ -62,12 +73,81 @@ def download(args, lines):
         else:
             raise Warning('Checksum failed %s.' % outfile)
 
-# ========== ===========
-# Concatenate file parts
-# ========== ===========
+
+def full_extract(args, fname):
+    """
+    Extract zip files
+    """
+    print('Extracting %s' % fname)
+    if fname.endswith(".tar.gz"):
+        with tarfile.open(fname, "r:gz") as tar:
+            tar.extractall(args.save_path)
+    elif fname.endswith(".zip"):
+        with ZipFile(fname, 'r') as zf:
+            zf.extractall(args.save_path)
+
+
+def part_extract(args, fname, target):
+    """
+    Partially extract zip files
+    """
+    print('Extracting %s' % fname)
+    with ZipFile(fname, 'r') as zf:
+        for infile in zf.namelist():
+            if any([infile.startswith(x) for x in target]):
+                zf.extract(infile, args.save_path)
+
+
+def split_musan(args):
+    """
+    Split MUSAN for faster random access
+    """
+
+    files = glob.glob('%s/musan/*/*/*.wav' % args.noise_folder)
+
+    audlen = 16000 * 5
+    audstr = 16000 * 3
+
+    for idx, file in enumerate(tqdm(files)):
+        fs, aud = wavfile.read(file)
+        writedir = os.path.splitext(file.replace('/musan/',
+                                                 '/musan_split/'))[0]
+        os.makedirs(writedir)
+        for st in range(0, len(aud) - audlen, audstr):
+            wavfile.write(writedir + '/%05d.wav' % (st / fs), fs,
+                          aud[st:st + audlen])
+
+
+def prepare_augmentation(args):
+    """
+    Check wether the augmentation dataset is already downloaded
+
+    Args:
+        args ([type]): [description]
+    """
+    split_musan(args)
+#     if all(os.path.exists(path) for _, path in args.augment_options['augment_paths'].items()):
+#         print('Downloading augmentation dataset...')
+#         if os.path.exists(f'{args.noise_folder}/augment.txt'):
+#             with open(f'{args.noise_folder}/augment.txt', 'r') as f:
+#                 augfiles = f.readlines()
+#             download(args, augfiles)
+
+# #             full_extract(args, os.path.join(
+# #                 args.augment_path, 'rirs_noises.zip'))
+
+# #             full_extract(args, os.path.join(args.augment_path, 'musan.tar.gz'))
+
+#             split_musan(args)
+#     else:
+#         print('Augmentation dataset already exists in',
+#               f'{args.noise_folder}/augment.txt', 'r')
 
 
 def concatenate(args, lines):
+    # ========== ===========
+    # Concatenate file parts
+    # ========== ===========
 
     for line in tqdm(lines):
         infile = line.split()[0]
@@ -88,115 +168,28 @@ def concatenate(args, lines):
         out = subprocess.call('rm %s/%s' %
                               (args.save_path, infile), shell=True)
 
-# ========== ===========
-# Extract zip files
-# ========== ===========
 
-
-def full_extract(args, fname):
-
-    print('Extracting %s' % fname)
-    if fname.endswith(".tar.gz"):
-        with tarfile.open(fname, "r:gz") as tar:
-            tar.extractall(args.save_path)
-    elif fname.endswith(".zip"):
-        with ZipFile(fname, 'r') as zf:
-            zf.extractall(args.save_path)
-
-# ========== ===========
-# Partially extract zip files
-# ========== ===========
-
-
-def part_extract(args, fname, target):
-
-    print('Extracting %s' % fname)
-    with ZipFile(fname, 'r') as zf:
-        for infile in zf.namelist():
-            if any([infile.startswith(x) for x in target]):
-                zf.extract(infile, args.save_path)
-            # pdb.set_trace()
-            # zf.extractall(args.save_path)
-
-# ========== ===========
-# Convert
-# ========== ===========
+def convert_aac_wav(fname):
+    outfile = fname.replace('.m4a', '.wav').replace('aac/', 'wav/')
+    os.makedirs(Path(outfile).parent, exist_ok=True)
+    out = subprocess.call(
+        'ffmpeg -y -i %s -ac 1 -vn -acodec pcm_s16le -ar 16000 %s >/dev/null 2>/dev/null' % (fname, outfile), shell=True)
+    if out != 0:
+        raise ValueError('Conversion failed %s.' % fname)
 
 
 def convert_voxceleb(args):
     # dataset/train_data/VoxCeleb/ voxceleb2/id00012/_raOc3-IRsw/00110.m4a
-    files = list(tqdm(glob.glob('%s/voxceleb2/*/*/*.m4a' %
-                 args.save_path), desc='Getting audio paths'))
+    files = glob.glob('%s/voxceleb2/*/*/*/*.m4a' % args.save_path)
     files.sort()
-
     print('Converting files from AAC to WAV')
-    for fname in tqdm(files):
-        outfile = fname.replace('.m4a', '.wav')
-        out = subprocess.call(
-            'ffmpeg -y -i %s -ac 1 -vn -acodec pcm_s16le -ar 16000 %s >/dev/null 2>/dev/null' % (fname, outfile), shell=True)
-        if out != 0:
-            raise ValueError('Conversion failed %s.' % fname)
 
-# ========== ===========
-# Split MUSAN for faster random access
-# ========== ===========
+    p = Pool(processes=96)
+    results = p.map(convert_aac_wav, files)
+    p.close()
+    p.join()
 
-
-def split_musan(args):
-
-    files = glob.glob('%s/musan/*/*/*.wav' % args.save_path)
-
-    audlen = 16000*5
-    audstr = 16000*3
-
-    for idx, file in enumerate(files):
-        fs, aud = wavfile.read(file)
-        writedir = os.path.splitext(
-            file.replace('/musan/', '/musan_split/'))[0]
-        os.makedirs(writedir)
-        for st in range(0, len(aud)-audlen, audstr):
-            wavfile.write(writedir+'/%05d.wav' %
-                          (st/fs), fs, aud[st:st+audlen])
-
-        print(idx, file)
-
-
-def get_audio_path(folder):
-    """
-    Get the audio path for a given folder
-
-    Args:
-        folder ([type]): [description]
-
-    Returns:
-        list: [description]
-    """
-    return glob.glob(os.path.join(folder, '*.wav'))
-
-
-def prepare_augmentation(args):
-    """
-    Check wether the augmentation dataset is already downloaded
-
-    Args:
-        args ([type]): [description]
-    """
-    if all(os.path.exists(path) for _, path in args.augment_options['augment_paths'].items()):
-        print('Downloading augmentation dataset...')
-        if os.path.exists(f'{args.noise_folder}/augment.txt'):
-            with open(f'{args.noise_folder}/augment.txt', 'r') as f:
-                augfiles = f.readlines()
-            download(args, augfiles)
-
-            full_extract(args, os.path.join(
-                args.augment_path, 'rirs_noises.zip'))
-
-            full_extract(args, os.path.join(args.augment_path, 'musan.tar.gz'))
-
-            split_musan(args)
-    else:
-        print('Augmentation dataset already exists in',
-              f'{args.noise_folder}/augment.txt', 'r')
+    print('-----------')
 
 
 def augmentation(args, audio_paths, mode='train', max_frames=200, step_save=5, **kwargs):
@@ -230,7 +223,6 @@ def augmentation(args, audio_paths, mode='train', max_frames=200, step_save=5, *
                                 rir_path=rir_path,
                                 max_frames=max_frames,
                                 sample_rate=8000, target_db=None)
-    list_audios = []
 
     for idx, fpath in enumerate(tqdm(augment_audio_paths, unit='files', desc=f"Augmented process")):
 
@@ -240,7 +232,6 @@ def augmentation(args, audio_paths, mode='train', max_frames=200, step_save=5, *
                         sample_rate=8000,
                         augment_chain=[])
 
-        augtypes = ['rev', 'noise', 'both']
         modes = ['music', 'speech', 'noise', 'noise_vad']
         p_base = [0.25, 0.25, 0.25, 0.25]
         # augment types
@@ -276,7 +267,6 @@ def augmentation(args, audio_paths, mode='train', max_frames=200, step_save=5, *
 class DataGenerator():
     def __init__(self, args, **kwargs):
         self.args = args
-
         self.data_folder = args.data_folder
         self.spkID_list = glob.glob(str(Path(self.data_folder + '/wav/*')))
 
@@ -322,12 +312,8 @@ class DataGenerator():
 
         loader_bar = tqdm(list(classpaths)[:], desc="Processing:...")
         for classpath in loader_bar:
+
             filepaths = list(classpath.glob('*.wav'))
-
-            blist = None
-            if blist is not None:
-                filepaths = list(set(filepaths).difference(set(blist)))
-
             # check duration, sr
             filepaths = check_valid_audio(
                 filepaths, self.args.audio_spec['sentence_len'] * 0.5, self.args.audio_spec['sample_rate'])
@@ -345,7 +331,8 @@ class DataGenerator():
 
             random.shuffle(filepaths)
 
-            val_num = 3  # 3 utterances per speaker for val
+            # 3 utterances per speaker for val
+            val_num = min(3, len(filepaths))
 
             if self.args.dataloader_options['split_ratio'] > 0:
                 val_num = int(
@@ -485,23 +472,19 @@ try:
             filter(lambda x: 'augment' not in str(x) and 'vad' not in str(x), data_paths))
 
         for audio_path in tqdm(raw_paths):
-            vad_engine.detect(audio_path)
+            vad_engine.detect(audio_path, duration_min=1.5)
         print("Done!")
 except:
     print('can not import vad_tools')
 
-
-# ========== ===========
-# Main script
-# ========== ===========
+    def vad_on_dataset(raw_dataset):
+        pass
 
 parser = argparse.ArgumentParser(description="Data preparation")
 if __name__ == '__main__':
     # ========== ===========
     # Parse input arguments
     # ========== ===========
-    parser = argparse.ArgumentParser(description="VoxCeleb downloader")
-
     parser.add_argument('--save_path', 	type=str,
                         default="dataset/train_data/VoxCeleb", help='Target directory')
     parser.add_argument('--user', 		type=str, default="user", help='Username')
@@ -540,7 +523,7 @@ if __name__ == '__main__':
     parser.add_argument('--convert',
                         default=False,
                         action='store_true',
-                        help='Enable convert')
+                        help='Enable coversion')
     parser.add_argument('--generate',
                         default=False,
                         action='store_true',
@@ -566,29 +549,28 @@ if __name__ == '__main__':
                         type=float,
                         default=0.5,
                         help='')
+
     args = parser.parse_args()
-
-    print('Start processing...')
-    if not os.path.exists(args.save_path):
-        raise ValueError('Target directory does not exist.')
-
-    f = open('lists/fileparts.txt', 'r')
-    fileparts = f.readlines()
-    f.close()
-
-    f = open('lists/files.txt', 'r')
-    files = f.readlines()
-    f.close()
-
-    f = open('lists/augment.txt', 'r')
-    augfiles = f.readlines()
-    f.close()
 
     if args.config is not None:
         args = read_config(args.config, args)
         args = argparse.Namespace(**args)
 
+    print('Start processing...')
+    if not os.path.exists(args.save_path):
+        raise ValueError('Target directory does not exist.')
+
+    if args.generate:
+        data_generator = DataGenerator(args)
+        data_generator.generate_metadata(
+            num_spks=args.num_spks, lower_num=args.lower_num, upper_num=args.upper_num)
+    if args.restore:
+        restore_dataset(args.data_folder)
+
     if args.augment:
+        f = open('lists/augment.txt', 'r')
+        augfiles = f.readlines()
+        f.close()
         download(args, augfiles)
         part_extract(args, os.path.join(args.save_path, 'rirs_noises.zip'), [
                      'RIRS_NOISES/simulated_rirs/mediumroom', 'RIRS_NOISES/simulated_rirs/smallroom'])
@@ -598,9 +580,15 @@ if __name__ == '__main__':
         #     args=args, audio_paths=data_generator.spkID_list, step_save=100, mode=args.augment_mode)
 
     if args.download:
+        f = open('lists/fileparts.txt', 'r')
+        fileparts = f.readlines()
+        f.close()
         download(args, fileparts)
 
     if args.extract:
+        f = open('lists/files.txt', 'r')
+        files = f.readlines()
+        f.close()
         concatenate(args, files)
         for file in tqdm(files):
             full_extract(args, os.path.join(args.save_path, file.split()[1]))
@@ -614,12 +602,3 @@ if __name__ == '__main__':
     if args.convert:
         print('Converting...')
         convert_voxceleb(args)
-
-    # if args.convert:
-    #     data_generator.convert()
-    data_generator = DataGenerator(args)
-    if args.generate:
-        data_generator.generate_metadata(
-            num_spks=args.num_spks, lower_num=args.lower_num, upper_num=args.upper_num)
-    if args.restore:
-        restore_dataset(args.data_folder)

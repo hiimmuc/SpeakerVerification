@@ -198,7 +198,18 @@ class ResNetSE(nn.Module):
             out_dim = num_filters[3] * block.expansion * outmap_size * 2
         else:
             raise ValueError('Undefined encoder')
-
+        
+        # if self.encoder_type == "SAP":
+        #     self.sap_linear = nn.Linear(num_filters[3] * block.expansion, num_filters[3] * block.expansion)
+        #     self.attention = self.new_parameter(num_filters[3] * block.expansion, 1)
+        #     out_dim = num_filters[3] * block.expansion
+        # elif self.encoder_type == "ASP":
+        #     self.sap_linear = nn.Linear(num_filters[3] * block.expansion, num_filters[3] * block.expansion)
+        #     self.attention = self.new_parameter(num_filters[3] * block.expansion, 1)
+        #     out_dim = num_filters[3] * block.expansion * 2
+        # else:
+        #     raise ValueError('Undefined encoder')
+            
         self.fc = nn.Linear(out_dim, nOut)
 
         for m in self.modules():
@@ -229,6 +240,11 @@ class ResNetSE(nn.Module):
             layers.append(block(self.inplanes, planes))
 
         return nn.Sequential(*layers)
+    
+    def new_parameter(self, *size):
+        out = nn.Parameter(torch.FloatTensor(*size))
+        nn.init.xavier_normal_(out)
+        return out
 
     def forward(self, x):
         with torch.no_grad():
@@ -249,23 +265,34 @@ class ResNetSE(nn.Module):
         x = self.layer3(x)
         x = self.layer4(x)
 
+        x = x.reshape(x.size()[0],-1,x.size()[-1])
+
+        w = self.attention(x)
+
         if self.encoder_type == "SAP":
-            x = torch.mean(x, dim=2, keepdim=True)
-            x = x.permute(0, 2, 1, 3)
-            x = x.squeeze(dim=1).permute(0, 2, 1)  # batch * L * D
-            h = torch.tanh(self.sap_linear(x))
-            w = torch.matmul(h, self.attention).squeeze(dim=2)
-            w = F.softmax(w, dim=1).view(x.size(0), x.size(1), 1)
-            x = torch.sum(x * w, dim=1)
-
+            x = torch.sum(x * w, dim=2)
         elif self.encoder_type == "ASP":
-            x = x.reshape(x.size()[0], -1, x.size()[-1])
-            w = self.attention(x)
             mu = torch.sum(x * w, dim=2)
-            sg = torch.sqrt(
-                (torch.sum((x**2) * w, dim=2) - mu**2).clamp(min=1e-5))
-            x = torch.cat((mu, sg), 1)
+            sg = torch.sqrt((torch.sum((x**2) * w, dim=2) - mu**2 ).clamp(min=1e-5))
+            x = torch.cat((mu,sg),1)
+        
+#         x = torch.mean(x, dim=2, keepdim=True)
 
+#         if self.encoder_type == "SAP":
+#             x = x.permute(0,3,1,2).squeeze(-1)
+#             h = torch.tanh(self.sap_linear(x))
+#             w = torch.matmul(h, self.attention).squeeze(dim=2)
+#             w = F.softmax(w, dim=1).view(x.size(0), x.size(1), 1)
+#             x = torch.sum(x * w, dim=1)
+#         elif self.encoder_type == "ASP":
+#             x = x.permute(0,3,1,2).squeeze(-1)
+#             h = torch.tanh(self.sap_linear(x))
+#             w = torch.matmul(h, self.attention).squeeze(dim=2)
+#             w = F.softmax(w, dim=1).view(x.size(0), x.size(1), 1)
+#             mu = torch.sum(x * w, dim=1)
+#             rh = torch.sqrt( ( torch.sum((x**2) * w, dim=1) - mu**2 ).clamp(min=1e-5) )
+#             x = torch.cat((mu,rh),1)
+            
         x = x.view(x.size()[0], -1)
         x = self.fc(x)
 
