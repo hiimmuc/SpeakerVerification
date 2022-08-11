@@ -4,6 +4,8 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from torch.nn.parameter import Parameter
 
+# NOTE: on development branch, this is not working
+
 
 def conv1d(ni: int, no: int, ks: int = 1, stride: int = 1, padding: int = 0, bias: bool = False):
     "Create and initialize a `nn.Conv1d` layer with spectral normalization."
@@ -21,7 +23,7 @@ class SimpleSelfAttention(nn.Module):
 
         self.conv = conv1d(n_in, n_in, ks, padding=ks//2, bias=False)
 
-        self.gamma = nn.Parameter(tensor([0.]))
+        self.gamma = nn.Parameter(nn.Tensor([0.]))
 
         self.sym = sym
         self.n_in = n_in

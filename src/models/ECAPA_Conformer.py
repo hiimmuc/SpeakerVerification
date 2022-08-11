@@ -1,14 +1,13 @@
+import numpy as np
 import torch  # noqa: F401
 import torch.nn as nn
 import torch.nn.functional as F
-
-import numpy as np
-
-from models.ECAPA_TDNN import *
-from models.ECAPA_utils import Conv1d as _Conv1d
-from models.ECAPA_utils import BatchNorm1d as _BatchNorm1d
 # from models.conformer.conformer.encoder import ConformerEncoder
 from conformer.encoder import ConformerEncoder
+
+from models.ECAPA_TDNN import *
+from models.ECAPA_utils import BatchNorm1d as _BatchNorm1d
+from models.ECAPA_utils import Conv1d as _Conv1d
 
 
 class ECAPA_Conformer(torch.nn.Module):
@@ -57,18 +56,18 @@ class ECAPA_Conformer(torch.nn.Module):
         assert len(channels) == len(kernel_sizes)
         assert len(channels) == len(dilations)
         assert input_size == kwargs['n_mels'], "inappropriate input size, should equal feature_dim"
-        
+
         self.channels = channels
         self.aug = kwargs['augment']
-        self.aug_chain = kwargs['augment_options']['augment_chain']        
+        self.aug_chain = kwargs['augment_options']['augment_chain']
         self.kwargs = kwargs
-        
+
         self.blocks = nn.ModuleList()
-        
-        self.specaug = SpecAugment() # Spec augmentation
-        
-        self.instance_norm = nn.InstanceNorm1d(input_size, affine=True, 
-                                               eps=1e-05, momentum=0.1, 
+
+        self.specaug = SpecAugment()  # Spec augmentation
+
+        self.instance_norm = nn.InstanceNorm1d(input_size, affine=True,
+                                               eps=1e-05, momentum=0.1,
                                                track_running_stats=False)
 
         # The initial TDNN layer
@@ -104,30 +103,30 @@ class ECAPA_Conformer(torch.nn.Module):
             dilations[-1],
             activation,
         )
-        
-        ## Conformer
+
+        # Conformer
         # settings:
         # Type | Encoder Layers | Encoder Dim | Attention Heads | Conv Kernel Size
-        #  S           16             144             4                  32    
-        #  M           16             256             4                  32                 
-        #  L           17             512             8                  32                 
-        
-        encoder_dim = 144 # encoders layers S: 144 M: 256 L: 512
+        #  S           16             144             4                  32
+        #  M           16             256             4                  32
+        #  L           17             512             8                  32
+
+        encoder_dim = 144  # encoders layers S: 144 M: 256 L: 512
         self.conformer_block = ConformerEncoder(
-            input_dim = channels[-1],
-            encoder_dim = encoder_dim,
-            num_layers = 16,
-            num_attention_heads = 4,
-            feed_forward_expansion_factor = 4,
-            conv_expansion_factor = 2,
-            input_dropout_p = 0.1,
-            feed_forward_dropout_p = 0.1,
-            attention_dropout_p = 0.1,
-            conv_dropout_p = 0.1,
-            conv_kernel_size = 31,
-            half_step_residual = True,
+            input_dim=channels[-1],
+            encoder_dim=encoder_dim,
+            num_layers=16,
+            num_attention_heads=4,
+            feed_forward_expansion_factor=4,
+            conv_expansion_factor=2,
+            input_dropout_p=0.1,
+            feed_forward_dropout_p=0.1,
+            attention_dropout_p=0.1,
+            conv_dropout_p=0.1,
+            conv_kernel_size=31,
+            half_step_residual=True,
         )
-        
+
         # Attentive Statistical Pooling
         self.asp = AttentiveStatisticsPooling(
             encoder_dim,
@@ -142,7 +141,6 @@ class ECAPA_Conformer(torch.nn.Module):
             out_channels=lin_neurons,
             kernel_size=1,
         )
-        
 
     def forward(self, x, lengths=None):
         """Returns the embedding vector.
@@ -152,16 +150,16 @@ class ECAPA_Conformer(torch.nn.Module):
             Tensor of shape (batch, time, channel).
         """
         # Minimize transpose for efficiency
-        
+
         with torch.no_grad():
             if self.aug and 'spec_domain' in self.aug_chain:
                 x = self.specaug(x)
             if self.kwargs['features'] == 'melspectrogram':
                 x = x + 1e-6
-                x = x.log() # this will cause nan value for MFCC features
+                x = x.log()  # this will cause nan value for MFCC features
                 x = x - torch.mean(x, dim=-1, keepdim=True)
             x = self.instance_norm(x)
-        
+
         # x shape: batch x n_mels x n_frames of batch x fea x time
 
         xl = []
@@ -175,7 +173,7 @@ class ECAPA_Conformer(torch.nn.Module):
         # Multi-layer feature aggregation
         x = torch.cat(xl[1:], dim=1)
         x = self.mfa(x)
-        
+
         # conformer
         x = x.squeeze(1).permute(0, 2, 1)
         lens = torch.ones(x.shape[0]).to(x.device)
@@ -186,13 +184,14 @@ class ECAPA_Conformer(torch.nn.Module):
         # Attentive Statistical Pooling
         x = self.asp(x, lengths=lengths)
         x = self.asp_bn(x)
-        
+
         # Final linear transformation
         x = self.fc(x)
         x = x.squeeze()
-       
+
         return x
-    
+
+
 def MainModel(nOut=192, **kwargs):
     model = ECAPA_Conformer(lin_neurons=nOut, **kwargs)
     return model

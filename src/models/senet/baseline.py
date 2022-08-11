@@ -46,7 +46,8 @@ class PreActBasicBlock(BasicBlock):
     def __init__(self, inplanes, planes, stride):
         super(PreActBasicBlock, self).__init__(inplanes, planes, stride)
         if inplanes != planes:
-            self.downsample = nn.Sequential(nn.Conv2d(inplanes, planes, kernel_size=1, stride=stride, bias=False))
+            self.downsample = nn.Sequential(
+                nn.Conv2d(inplanes, planes, kernel_size=1, stride=stride, bias=False))
         else:
             self.downsample = lambda x: x
         self.bn1 = nn.BatchNorm2d(inplanes)
@@ -70,7 +71,8 @@ class ResNet(nn.Module):
     def __init__(self, block, n_size, num_classes=10):
         super(ResNet, self).__init__()
         self.inplane = 16
-        self.conv1 = nn.Conv2d(3, self.inplane, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv1 = nn.Conv2d(
+            3, self.inplane, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(self.inplane)
         self.relu = nn.ReLU(inplace=True)
         self.layer1 = self._make_layer(block, 16, blocks=n_size, stride=1)

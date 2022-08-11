@@ -3,15 +3,14 @@ This is the ECAPA-TDNN model.
 https://github.com/speechbrain/speechbrain/blob/96077e9a1afff89d3f5ff47cab4bca0202770e4f/speechbrain/lobes/models/ECAPA_TDNN.py
 '''
 
+import numpy as np
 import torch  # noqa: F401
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 
-from models.ECAPA_utils import Conv1d as _Conv1d
 from models.ECAPA_utils import BatchNorm1d as _BatchNorm1d
+from models.ECAPA_utils import Conv1d as _Conv1d
 from models.ECAPA_utils import Linear, length_to_mask
-
 from models.OnStreamAugment.specaugment import SpecAugment
 
 
@@ -389,25 +388,25 @@ class ECAPA_TDNN(torch.nn.Module):
     ):
 
         super().__init__()
-        
+
         assert len(channels) == len(kernel_sizes)
         assert len(channels) == len(dilations)
         assert input_size == kwargs['n_mels'], "inappropriate input size, should equal feature_dim"
-        
+
         self.channels = channels
         self.input_norm = input_norm
-        
+
         self.aug = kwargs['augment']
-        self.aug_chain = kwargs['augment_options']['augment_chain']        
+        self.aug_chain = kwargs['augment_options']['augment_chain']
         self.kwargs = kwargs
-        
+
         self.blocks = nn.ModuleList()
-        
+
         self.specaug = SpecAugment()  # Spec augmentation
-        
+
         if self.input_norm:
-            self.instance_norm = nn.InstanceNorm1d(input_size, affine=True, 
-                                                   eps=1e-05, momentum=0.1, 
+            self.instance_norm = nn.InstanceNorm1d(input_size, affine=True,
+                                                   eps=1e-05, momentum=0.1,
                                                    track_running_stats=False)
 
         # The initial TDNN layer
@@ -474,7 +473,7 @@ class ECAPA_TDNN(torch.nn.Module):
                     x = self.specaug(x)
                 if self.kwargs['features'].strip() == 'melspectrogram':
                     x = x + 1e-6
-                    x = x.log() # this will cause nan value for MFCC features
+                    x = x.log()  # this will cause nan value for MFCC features
                     x = x - torch.mean(x, dim=-1, keepdim=True)
                 if self.input_norm:
                     x = self.instance_norm(x)

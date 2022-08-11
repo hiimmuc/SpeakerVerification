@@ -1,10 +1,11 @@
-import math
-import torch
 import logging
+import math
+from typing import Tuple
+
 import numpy as np
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +13,7 @@ logger = logging.getLogger(__name__)
 from speechbrain.nnet.CNN import Conv1d as _Conv1d
 from speechbrain.nnet.normalization import BatchNorm1d as _BatchNorm1d
 """
+
 
 class SincConv(nn.Module):
     """This function implements SincConv (SincNet).
@@ -1110,6 +1112,7 @@ def get_padding_elem_transposed(
 
 # ============================================Normalization======================================
 
+
 class BatchNorm1d(nn.Module):
     """Applies 1d batch normalization to the input tensor.
     Arguments
@@ -1448,13 +1451,15 @@ class InstanceNorm2d(nn.Module):
         x_n = x_n.transpose(1, -1)
 
         return x_n
-    
+
 # ==============================================pooling==================================================
+
 
 class StatisticsPooling(torch.nn.Module):
     """
     Mean and Standard deviation pooling
     """
+
     def __init__(self):
         """
 
@@ -1477,7 +1482,7 @@ class GlobalAveragePooling(torch.nn.Module):
     def __init__(self):
         super(GlobalAveragePooling, self).__init__()
         self.pooling = nn.AdaptiveAvgPool1d(1)
-    
+
     # ==========> code <===========
     def forward(self, x):
         '''
@@ -1488,6 +1493,7 @@ class GlobalAveragePooling(torch.nn.Module):
     # ==========> code <===========
 
 # from speechbrain.dataio.dataio import length_to_mask
+
 
 def length_to_mask(length, max_len=None, dtype=None, device=None):
     """Creates a binary mask for each sequence.

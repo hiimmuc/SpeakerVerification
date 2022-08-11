@@ -1,19 +1,18 @@
-import os
-import time
-import math
-import sys
 import json
-from matplotlib.pyplot import figure
+import math
+import os
+import sys
+import time
 
 import torch
 import torch.nn.functional as F
 import wandb
+from matplotlib.pyplot import figure
 from rich.console import Console
 from rich.table import Table
 from tqdm import tqdm
 
 import utils
-
 
 # Rich console
 CONSOLE = Console()
@@ -123,7 +122,8 @@ def train_one_epoch(
         if log_console:
             times = {"model": model_time, "data": data_time, "opt": opt_time}
             log_step(
-                current_epoch, total_epochs, step, len(dataloader), loss, times, "train"
+                current_epoch, total_epochs, step, len(
+                    dataloader), loss, times, "train"
             )
 
         # Empty CUDA cache
@@ -160,7 +160,8 @@ def train_one_epoch(
 
     # Plot embeddings
     if figures_path is not None:
-        figure_path = os.path.join(figures_path, f"epoch_{current_epoch}_train.png")
+        figure_path = os.path.join(
+            figures_path, f"epoch_{current_epoch}_train.png")
         utils.visualize_embeddings(
             torch.stack(epoch_embeddings),
             epoch_targets,
@@ -363,7 +364,8 @@ def evaluate(
         if log_console:
             times = {"model": model_time, "data": data_time}
             log_step(
-                current_epoch, total_epochs, step, len(dataloader), loss, times, "val"
+                current_epoch, total_epochs, step, len(
+                    dataloader), loss, times, "val"
             )
 
         # Increment step and re-initialize time counter
@@ -373,7 +375,8 @@ def evaluate(
     # Get metrics and return them
     metrics = dict()
     if len(epoch_preds) > 0:
-        metrics = utils.get_train_val_metrics(epoch_targets, epoch_preds, prefix="val")
+        metrics = utils.get_train_val_metrics(
+            epoch_targets, epoch_preds, prefix="val")
     metrics[f"val/total_loss"] = epoch_loss
     metrics[f"val/avg_loss"] = epoch_loss / len(dataloader)
     metrics[f"val/total_data_time"] = epoch_data_time

@@ -24,7 +24,8 @@ from torch.nn.parameter import Parameter
 
 class _BatchAttNorm(_BatchNorm):
     def __init__(self, num_features, eps=1e-5, momentum=0.1, affine=False):
-        super(_BatchAttNorm, self).__init__(num_features, eps, momentum, affine)
+        super(_BatchAttNorm, self).__init__(
+            num_features, eps, momentum, affine)
         self.avg = nn.AdaptiveAvgPool2d((1, 1))
         self.sigmoid = nn.Sigmoid()
         self.weight = Parameter(torch.Tensor(1, num_features, 1, 1))
@@ -40,7 +41,8 @@ class _BatchAttNorm(_BatchNorm):
         self._check_input_dim(input)
 
         # Batch norm
-        attention = self.sigmoid(self.avg(input) * self.weight_readjust + self.bias_readjust)
+        attention = self.sigmoid(
+            self.avg(input) * self.weight_readjust + self.bias_readjust)
         bn_w = self.weight * attention
 
         out_bn = F.batch_norm(
@@ -50,13 +52,16 @@ class _BatchAttNorm(_BatchNorm):
 
         return out_bn
 
+
 class BAN2d(_BatchAttNorm):
     '''
     https://github.com/gbup-group/IEBN/blob/master/models/cifar/iebn_resnet.py
     '''
+
     def _check_input_dim(self, input):
         if input.dim() != 4:
-            raise ValueError('expected 4D input (got {}D input)'.format(input.dim()))
+            raise ValueError(
+                'expected 4D input (got {}D input)'.format(input.dim()))
 
 
 class ChannelSELayer(nn.Module):
@@ -172,15 +177,15 @@ class SEBasicBlock(nn.Module):
                  base_width=64, dilation=1, norm_layer=None,
                  *, reduction=16):
         super(SEBasicBlock, self).__init__()
-        
+
         self.conv1 = conv3x3(inplanes, planes, stride)
         self.bn1 = nn.BatchNorm2d(planes)
         self.relu = nn.ReLU(inplace=True)
-        
+
         self.conv2 = conv3x3(planes, planes, 1)
         self.bn2 = nn.BatchNorm2d(planes)
         self.se = SELayer(planes, reduction)
-        
+
         self.downsample = downsample
         self.stride = stride
 

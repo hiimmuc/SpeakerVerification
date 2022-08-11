@@ -1,7 +1,7 @@
 import torch.nn as nn
+from senet.se_module import SELayer
 from torch.hub import load_state_dict_from_url
 from torchvision.models import ResNet
-from senet.se_module import SELayer
 
 
 def conv3x3(in_planes, out_planes, stride=1):

@@ -1,11 +1,16 @@
 from argparse import ArgumentParser
 from functools import partial
 
+import datasets
+import learn
 import torch
 import torch.optim as optim
-import yaml
+import transforms
 
-import datasets, transforms, models, learn, losses, utils
+import losses
+import models
+import utils
+import yaml
 
 
 def train(params):
@@ -78,7 +83,8 @@ def train(params):
     # Get loss function
     loss_params = dict()
     if params.training.loss in params.loss.__dict__:
-        loss_params = params.loss.__dict__[params.training.loss].__dict__["entries"]
+        loss_params = params.loss.__dict__[
+            params.training.loss].__dict__["entries"]
     loss_function = losses.LOSSES[params.training.loss](
         params.generic.embedding_size, n_speakers, device=device, **loss_params
     )

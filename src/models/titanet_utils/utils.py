@@ -1,28 +1,23 @@
-import random
 import datetime
 import os
+import random
 import string
 
-import torch
+import IPython.display as ipd
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import IPython.display as ipd
-import wandb
+import torch
 import umap
-from sklearn.manifold import TSNE
-from sklearn.decomposition import TruncatedSVD
-from scipy.spatial import ConvexHull
+import wandb
 from scipy import interpolate
-from sklearn.metrics import (
-    accuracy_score,
-    precision_score,
-    recall_score,
-    f1_score,
-    roc_curve,
-)
 from scipy.interpolate import interp1d
 from scipy.optimize import brentq
+from scipy.spatial import ConvexHull
+from sklearn.decomposition import TruncatedSVD
+from sklearn.manifold import TSNE
+from sklearn.metrics import (accuracy_score, f1_score, precision_score,
+                             recall_score, roc_curve)
 
 
 class Struct:
@@ -97,7 +92,8 @@ def visualize_embeddings(
         )
 
     # Store embeddings in a dataframe and compute cluster colors
-    embeddings_df = pd.DataFrame(embeddings, columns=["x", "y"], dtype=np.float32)
+    embeddings_df = pd.DataFrame(
+        embeddings, columns=["x", "y"], dtype=np.float32)
     embeddings_df["l"] = np.expand_dims(labels, axis=-1)
     cluster_colors = {l: np.random.random(3) for l in np.unique(labels)}
     embeddings_df["c"] = embeddings_df.l.map(
@@ -145,10 +141,12 @@ def visualize_embeddings(
 
                 # Interpolate to get a smoother figure
                 dist = np.sqrt(
-                    (x_hull[:-1] - x_hull[1:]) ** 2 + (y_hull[:-1] - y_hull[1:]) ** 2
+                    (x_hull[:-1] - x_hull[1:]) ** 2 +
+                    (y_hull[:-1] - y_hull[1:]) ** 2
                 )
                 dist_along = np.concatenate(([0], dist.cumsum()))
-                spline, _ = interpolate.splprep([x_hull, y_hull], u=dist_along, s=0)
+                spline, _ = interpolate.splprep(
+                    [x_hull, y_hull], u=dist_along, s=0)
                 interp_d = np.linspace(dist_along[0], dist_along[-1], 50)
                 interp_x, interp_y = interpolate.splev(interp_d, spline)
 
@@ -174,11 +172,13 @@ def reduce(embeddings, n_components=2, reduction_method="umap", seed=42):
     Applies the selected dimensionality reduction technique
     to the given input data
     """
-    assert reduction_method in ("svd", "tsne", "umap"), "Unsupported reduction method"
+    assert reduction_method in (
+        "svd", "tsne", "umap"), "Unsupported reduction method"
     if reduction_method == "svd":
         reducer = TruncatedSVD(n_components=n_components, random_state=seed)
     elif reduction_method == "tsne":
-        reducer = TSNE(n_components=n_components, metric="cosine", random_state=seed)
+        reducer = TSNE(n_components=n_components,
+                       metric="cosine", random_state=seed)
     elif reduction_method == "umap":
         reducer = umap.UMAP(
             n_components=n_components, metric="cosine", random_state=seed
@@ -211,7 +211,8 @@ def plot_spectrogram(spectrogram, figsize=(12, 3)):
 
     # Plot the spectrogram
     _, ax = plt.subplots(figsize=figsize)
-    img = ax.imshow(spectrogram, aspect="auto", origin="lower", interpolation="none")
+    img = ax.imshow(spectrogram, aspect="auto",
+                    origin="lower", interpolation="none")
     plt.colorbar(img, ax=ax)
     plt.xlabel("Time")
     plt.ylabel("Frequency")
@@ -231,7 +232,8 @@ def play_audio(waveform, sample_rate):
     elif num_channels == 2:
         ipd.display(ipd.Audio((waveform[0], waveform[1]), rate=sample_rate))
     else:
-        raise ValueError("Waveform with more than 2 channels are not supported")
+        raise ValueError(
+            "Waveform with more than 2 channels are not supported")
 
 
 def to_numpy(arr):
@@ -404,7 +406,8 @@ def init_wandb(api_key_file, project, entity, name=None, config=None):
     """
     Return a new W&B run to be used for logging purposes
     """
-    assert os.path.exists(api_key_file), "The given W&B API key file does not exist"
+    assert os.path.exists(
+        api_key_file), "The given W&B API key file does not exist"
     api_key_value = open(api_key_file, "r").read().strip()
     os.environ["WANDB_API_KEY"] = api_key_value
     return wandb.init(
@@ -459,7 +462,8 @@ def chart_dependencies(model, n_mels=80, device="cpu"):
     loss = outputs[random_index].sum()
     loss.backward()
     assert (
-        torch.cat([inputs.grad[i] == 0 for i in range(batch_size) if i != random_index])
+        torch.cat([inputs.grad[i] == 0 for i in range(
+            batch_size) if i != random_index])
     ).all() and (
         inputs.grad[random_index] != 0
     ).any(), f"Only index {random_index} should have non-zero gradients"

@@ -1,8 +1,8 @@
+import numpy as np
 import torch  # noqa: F401
 import torch.nn as nn
 import torch.nn.functional as F
 import torchaudio
-import numpy as np
 
 
 class SpecAugment(torch.nn.Module):

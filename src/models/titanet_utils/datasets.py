@@ -1,12 +1,12 @@
-import os
 import itertools
+import os
 from collections import defaultdict
 from functools import partial
 
-import torch
-import torchaudio
 import librosa
 import numpy as np
+import torch
+import torchaudio
 from tqdm import tqdm
 
 import utils
@@ -114,8 +114,10 @@ class SpeakerDataset:
         self.transforms = transforms or []
         self.speakers_utterances = self.get_speakers_utterances()
         self.speakers = list(self.speakers_utterances.keys())
-        self.speakers_to_id = dict(zip(self.speakers, range(len(self.speakers))))
-        self.id_to_speakers = dict(zip(range(len(self.speakers)), self.speakers))
+        self.speakers_to_id = dict(
+            zip(self.speakers, range(len(self.speakers))))
+        self.id_to_speakers = dict(
+            zip(range(len(self.speakers)), self.speakers))
 
     def get_speakers_utterances(self):
         """
@@ -147,7 +149,8 @@ class SpeakerDataset:
         for speaker in random_speakers:
             speaker_utterances = self.speakers_utterances[speaker]
             utterances += list(
-                np.random.choice(speaker_utterances, size=n_utterances_per_speaker)
+                np.random.choice(speaker_utterances,
+                                 size=n_utterances_per_speaker)
             )
             speakers += [speaker] * n_utterances_per_speaker
         return utterances, speakers
@@ -200,7 +203,7 @@ class SpeakerDataset:
                 train_start_utterance += val_utterances_per_speaker
             if test and i < test_speakers:
                 test_utterances += self.speakers_utterances[s][
-                    val_utterances_per_speaker : val_utterances_per_speaker
+                    val_utterances_per_speaker: val_utterances_per_speaker
                     + test_utterances_per_speaker
                 ]
                 train_start_utterance += test_utterances_per_speaker
@@ -256,7 +259,8 @@ class SpeakerDataset:
         """
         Return a dictionary of generic info about the dataset
         """
-        utterances_per_speaker = [len(u) for u in self.speakers_utterances.values()]
+        utterances_per_speaker = [len(u)
+                                  for u in self.speakers_utterances.values()]
         durations_per_speaker = list(
             self.get_durations_per_speaker(hours=hours).values()
         )

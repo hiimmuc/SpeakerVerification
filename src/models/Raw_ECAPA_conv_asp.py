@@ -5,7 +5,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from models import ECAPA_TDNN, RawNet2_custom
-from models.FeatureExtraction.TDFbanks import tdfbanks
 
 
 class Raw_ECAPA(nn.Module):

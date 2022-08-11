@@ -52,17 +52,17 @@ class AdaBelief(Optimizer):
     """
 
     def __init__(
-        self,
-        params: Params,
-        lr: float = 1e-3,
-        betas: Betas2 = (0.9, 0.999),
-        eps: float = 1e-8,
-        weight_decay: float = 0,
-        amsgrad: bool = False,
-        weight_decouple: bool = False,
-        fixed_decay: bool = False,
-        rectify: bool = False,
-        **kwargs) -> None:
+            self,
+            params: Params,
+            lr: float = 1e-3,
+            betas: Betas2 = (0.9, 0.999),
+            eps: float = 1e-8,
+            weight_decay: float = 0,
+            amsgrad: bool = False,
+            weight_decouple: bool = False,
+            fixed_decay: bool = False,
+            rectify: bool = False,
+            **kwargs) -> None:
         if lr <= 0.0:
             raise ValueError('Invalid learning rate: {}'.format(lr))
         if eps < 0.0:

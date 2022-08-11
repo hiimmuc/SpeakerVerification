@@ -1,12 +1,12 @@
-import random
 import os
+import random
 import shutil
 from pathlib import Path
 
-import torch
-import torchaudio
-import torch.nn.functional as F
 import requests
+import torch
+import torch.nn.functional as F
+import torchaudio
 
 
 def copy_example(example):
@@ -102,7 +102,8 @@ class SpeedPerturbation:
             ) = torchaudio.sox_effects.apply_effects_tensor(
                 new_example["waveform"],
                 new_example["sample_rate"],
-                [["speed", str(speed)], ["rate", str(new_example["sample_rate"])]],
+                [["speed", str(speed)], ["rate", str(
+                    new_example["sample_rate"])]],
             )
 
         return new_example
@@ -180,8 +181,10 @@ class MelSpectrogram:
         # Convert to mel scale, convert from amplitude to decibels and
         # normalize over the frequency dimension
         new_example["spectrogram"] = self.mel_scale(new_example["spectrogram"])
-        new_example["spectrogram"] = self.amplitude_to_db(new_example["spectrogram"])
-        new_example["spectrogram"] = F.normalize(new_example["spectrogram"], dim=1)
+        new_example["spectrogram"] = self.amplitude_to_db(
+            new_example["spectrogram"])
+        new_example["spectrogram"] = F.normalize(
+            new_example["spectrogram"], dim=1)
 
         # Apply frequency and time masking (SpecAugment)
         if apply_specaugment:
@@ -227,7 +230,7 @@ class RandomChunk:
             samples = int(length * new_example["sample_rate"])
             start = random.randint(0, num_samples - samples)
             new_example["waveform"] = new_example["waveform"][
-                :, start : start + samples
+                :, start: start + samples
             ]
 
         return new_example
@@ -280,7 +283,8 @@ class Reverb:
             rir_file = random.choice(self.rir_files)
             rir, rir_sr = torchaudio.load(rir_file)
             rir = rir.to(self.device)
-            rir = torchaudio.functional.resample(rir, orig_freq=rir_sr, new_freq=sr)
+            rir = torchaudio.functional.resample(
+                rir, orig_freq=rir_sr, new_freq=sr)
 
             # Clean up the RIR: normalize the signal power and then flip the time axis
             rir = rir / torch.norm(rir, p=2)

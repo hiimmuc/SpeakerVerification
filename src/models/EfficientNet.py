@@ -3,11 +3,8 @@ import math
 import torch
 import torch.nn as nn
 
-from models.Efficient_utils import conv_bn_act
-from models.Efficient_utils import SamePadConv2d
-from models.Efficient_utils import Flatten
-from models.Efficient_utils import SEModule
-from models.Efficient_utils import DropConnect
+from models.Efficient_utils import (DropConnect, Flatten, SamePadConv2d,
+                                    SEModule, conv_bn_act)
 from models.OnStreamAugment.specaugment import SpecAugment
 
 
@@ -118,7 +115,7 @@ class EfficientNet(nn.Module):
             MBBlock(renew_ch(192), renew_ch(320), 6, 3, 1,
                     renew_repeat(1), True, 0.25, drop_connect_rate)
         )
-        ## attention
+        # attention
         self.specaug = SpecAugment()
         self.instancenorm = nn.InstanceNorm1d(self.n_mels)
         outmap_size = int(self.n_mels / 8)
@@ -131,14 +128,14 @@ class EfficientNet(nn.Module):
                 att_dim, renew_ch(1280), kernel_size=1),
             nn.Softmax(dim=2),
         )
-        
+
         ####
         self.head = nn.Sequential(
             *conv_bn_act(renew_ch(320), renew_ch(1280),
                          kernel_size=1, bias=False),
             nn.AdaptiveAvgPool2d(1),
             nn.Dropout2d(
-                dropout_rate, True) if dropout_rate > 0 else nn.Identity()          
+                dropout_rate, True) if dropout_rate > 0 else nn.Identity()
         )
         self.fc = nn.Linear(renew_ch(1280), nOut)
         self.fc_attn = nn.Linear(renew_ch(1280) * 2, nOut)
@@ -161,18 +158,19 @@ class EfficientNet(nn.Module):
                 x = x - torch.mean(x, dim=-1, keepdim=True)
             x = self.instancenorm(x).unsqueeze(1)
 
-        assert len(x.size()) == 4 , f"got {x.size()}" # batch x channel x n_mels x n_frames
+        # batch x channel x n_mels x n_frames
+        assert len(x.size()) == 4, f"got {x.size()}"
 
         stem = self.stem(x)
         x = self.blocks(stem)
         x = self.head(x)
-        
+
         ##
         if self.aggregate == 'flatten':
             x = Flatten()(x)
             out = self.fc(x)
             return out
-        
+
         elif self.aggregate == "SAP":
             x = torch.mean(x, dim=2, keepdim=True)
             x = x.permute(0, 2, 1, 3)
@@ -190,7 +188,7 @@ class EfficientNet(nn.Module):
                 (torch.sum((x**2) * w, dim=2) - mu**2).clamp(min=1e-5))
             x = torch.cat((mu, sg), 1)
             x = x.view(x.size()[0], -1)
-            
+
         out = self.fc_attn(x)
         return out
 
@@ -212,8 +210,8 @@ def MainModel(nOut=512, **kwargs):
     version = 'b4'
     aggregate = 'ASP'
     width_coeff, depth_coeff, dropout_rate = efficient_net_version_params[version]
-    model = EfficientNet(width_coeff, depth_coeff, 
-                         aggregate = aggregate,
+    model = EfficientNet(width_coeff, depth_coeff,
+                         aggregate=aggregate,
                          depth_div=8, min_depth=None,
                          dropout_rate=dropout_rate, drop_connect_rate=0.2,
                          nOut=nOut, **kwargs)

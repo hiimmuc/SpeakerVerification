@@ -6,6 +6,7 @@
 #
 
 from __future__ import division
+
 import numpy as np
 
 
@@ -19,22 +20,22 @@ class Gabor(object):
                  wstride=10,
                  nfft=512,
                  normalize_energy=False):
-            if not nfilters > 0:
-                raise(Exception,
-                'Number of filters must be positive, not {0:%d}'.format(nfilters))
-            if max_freq > fs // 2:
-                raise(Exception,
-                'Upper frequency %f exceeds Nyquist %f' % (max_freq, fs // 2))
-            self.nfilters = nfilters
-            self.min_freq = min_freq
-            self.max_freq = max_freq
-            self.fs = fs
-            self.wlen = wlen
-            self.wstride = wstride
-            self.nfft = nfft
-            self.normalize_energy = normalize_energy
-            self._build_mels()
-            self._build_gabors()
+        if not nfilters > 0:
+            raise(Exception,
+                  'Number of filters must be positive, not {0:%d}'.format(nfilters))
+        if max_freq > fs // 2:
+            raise(Exception,
+                  'Upper frequency %f exceeds Nyquist %f' % (max_freq, fs // 2))
+        self.nfilters = nfilters
+        self.min_freq = min_freq
+        self.max_freq = max_freq
+        self.fs = fs
+        self.wlen = wlen
+        self.wstride = wstride
+        self.nfft = nfft
+        self.normalize_energy = normalize_energy
+        self._build_mels()
+        self._build_gabors()
 
     def _hz2mel(self, f):
         # Converts a frequency in hertz to mel
@@ -50,7 +51,7 @@ class Gabor(object):
 
         def gabor_function(t):
             return (1 / (np.sqrt(2 * np.pi) * sigma)) * np.exp(1j * eta * t) * np.exp(-t**2/(2 * sigma**2))
-        return np.asarray([gabor_function(t) for t in np.arange(-T/2,T/2 + 1)])
+        return np.asarray([gabor_function(t) for t in np.arange(-T/2, T/2 + 1)])
 
     def _gabor_params_from_mel(self, mel_filter):
         # Parameters in radians
@@ -60,7 +61,7 @@ class Gabor(object):
         peak = mel_filter[center_frequency]
         half_magnitude = peak/2.0
         spread = np.where(mel_filter >= half_magnitude)[0]
-        width = max(spread[-1] - spread[0],1)
+        width = max(spread[-1] - spread[0], 1)
         return center_frequency*2*np.pi/self.nfft, coeff/(np.pi*width)
 
     def _melfilter_energy(self, mel_filter):
@@ -71,7 +72,8 @@ class Gabor(object):
 
     def _build_mels(self):
         # build mel filter matrix
-        self.melfilters = [np.zeros(self.nfft//2 + 1) for i in range(self.nfilters)]
+        self.melfilters = [np.zeros(self.nfft//2 + 1)
+                           for i in range(self.nfilters)]
         dfreq = self.fs / self.nfft
 
         melmax = self._hz2mel(self.max_freq)
@@ -84,8 +86,10 @@ class Gabor(object):
         for filter_idx in range(0, self.nfilters):
             # Filter triangles in dft points
             leftfr = min(round(filt_edge[filter_idx] / dfreq), self.nfft//2)
-            centerfr = min(round(filt_edge[filter_idx + 1] / dfreq), self.nfft//2)
-            rightfr = min(round(filt_edge[filter_idx + 2] / dfreq), self.nfft//2)
+            centerfr = min(
+                round(filt_edge[filter_idx + 1] / dfreq), self.nfft//2)
+            rightfr = min(
+                round(filt_edge[filter_idx + 2] / dfreq), self.nfft//2)
             height = 1
             if centerfr != leftfr:
                 leftslope = height / (centerfr - leftfr)
@@ -93,7 +97,8 @@ class Gabor(object):
                 leftslope = 0
             freq = leftfr + 1
             while freq < centerfr:
-                self.melfilters[filter_idx][int(freq)] = (freq - leftfr) * leftslope
+                self.melfilters[filter_idx][int(freq)] = (
+                    freq - leftfr) * leftslope
                 freq += 1
             if freq == centerfr:
                 self.melfilters[filter_idx][int(freq)] = height
@@ -101,7 +106,8 @@ class Gabor(object):
             if centerfr != rightfr:
                 rightslope = height / (centerfr - rightfr)
             while freq < rightfr:
-                self.melfilters[filter_idx][int(freq)] = (freq - rightfr) * rightslope
+                self.melfilters[filter_idx][int(freq)] = (
+                    freq - rightfr) * rightslope
                 freq += 1
             if self.normalize_energy:
                 energy = self._melfilter_energy(self.melfilters[filter_idx])
@@ -117,5 +123,7 @@ class Gabor(object):
             self.center_frequencies.append(center_frequency)
             gabor_filter = self._gabor_wavelet(center_frequency, sigma)
             # Renormalize the gabor wavelets
-            gabor_filter = gabor_filter * np.sqrt(self._melfilter_energy(mel_filter)*2*np.sqrt(np.pi)*sigma)
+            gabor_filter = gabor_filter * \
+                np.sqrt(self._melfilter_energy(
+                    mel_filter)*2*np.sqrt(np.pi)*sigma)
             self.gaborfilters.append(gabor_filter)

@@ -1,7 +1,7 @@
-import torch
-import torch.nn.functional as F
-import torch.nn as nn
 import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 
 class MetricLearningLoss(nn.Module):
@@ -93,7 +93,8 @@ class AngularMarginLoss(MetricLearningLoss):
 
         # Set scale
         scales = (
-            torch.tensor([self.scale], device=inputs.device).repeat(inputs.size(0))
+            torch.tensor([self.scale], device=inputs.device).repeat(
+                inputs.size(0))
             if self.scale is not None
             else inputs_norms
         )
@@ -119,12 +120,13 @@ class AngularMarginLoss(MetricLearningLoss):
         excluded = torch.cat(
             [
                 scales[i]
-                * torch.cat((cosines[i, :y], cosines[i, y + 1 :])).unsqueeze(0)
+                * torch.cat((cosines[i, :y], cosines[i, y + 1:])).unsqueeze(0)
                 for i, y in enumerate(targets)
             ],
             dim=0,
         )
-        denominator = torch.exp(numerator) + torch.sum(torch.exp(excluded), dim=1)
+        denominator = torch.exp(numerator) + \
+            torch.sum(torch.exp(excluded), dim=1)
 
         # Compute cross-entropy loss
         loss = -torch.mean(numerator - torch.log(denominator + self.eps))
@@ -160,7 +162,8 @@ class CosFaceLoss(AngularMarginLoss):
     def __init__(
         self, embedding_size, n_classes, device="cpu", scale=64, margin=0.2, eps=1e-6
     ):
-        assert margin > 0 and margin < 1 - np.cos(np.pi / 4), "Margin out of bounds"
+        assert margin > 0 and margin < 1 - \
+            np.cos(np.pi / 4), "Margin out of bounds"
         super(CosFaceLoss, self).__init__(
             embedding_size, n_classes, device=device, scale=scale, m3=margin, eps=eps
         )
@@ -192,7 +195,8 @@ class GE2ELoss(MetricLearningLoss):
     """
 
     def __init__(self, embedding_size, n_classes, device="cpu"):
-        super(GE2ELoss, self).__init__(embedding_size, n_classes, device=device)
+        super(GE2ELoss, self).__init__(
+            embedding_size, n_classes, device=device)
         self.w = nn.Parameter(torch.tensor(1.0))
         self.b = nn.Parameter(torch.tensor(0.0))
 
@@ -225,7 +229,8 @@ class GE2ELoss(MetricLearningLoss):
                     embeddings_per_speaker[other_speaker].sum()
                     / embeddings_per_speaker[other_speaker].shape[0]
                 )
-                similarity = self.compute_similarity(speaker_embedding, centroid)
+                similarity = self.compute_similarity(
+                    speaker_embedding, centroid)
             summation = summation + torch.exp(similarity)
 
         # Sum first and second term

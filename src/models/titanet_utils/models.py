@@ -1,11 +1,12 @@
 from functools import partial
 
+import modules
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 
-import modules, losses
+import losses
 
 
 class DumbConvNet(nn.Module):
@@ -29,7 +30,8 @@ class DumbConvNet(nn.Module):
         channels = [n_mels] + [hidden_size] * n_layers
         self.conv = nn.Sequential(
             *[
-                modules.ConvBlock1d(in_channels, out_channels, kernel_size=kernel_size)
+                modules.ConvBlock1d(in_channels, out_channels,
+                                    kernel_size=kernel_size)
                 for in_channels, out_channels in zip(channels[:-1], channels[1:])
             ]
         )
@@ -91,7 +93,8 @@ class DVectorBaseline(nn.Module):
         super(DVectorBaseline, self).__init__()
 
         # Define architecture
-        self.recurrent = nn.LSTM(n_mels, hidden_size, n_lstm_layers, batch_first=True)
+        self.recurrent = nn.LSTM(
+            n_mels, hidden_size, n_lstm_layers, batch_first=True)
         self.projection = nn.Linear(hidden_size, embedding_size)
 
         # Store attributes
@@ -118,13 +121,16 @@ class DVectorBaseline(nn.Module):
         """
         # Pad spectrograms to have at least a number of frames
         # equal to the selected segment length
-        right_pad = np.clip(self.segment_length - spectrograms.size(-1), 0, None)
-        padded_spectrograms = F.pad(spectrograms, (0, right_pad), "constant", 0)
+        right_pad = np.clip(self.segment_length -
+                            spectrograms.size(-1), 0, None)
+        padded_spectrograms = F.pad(
+            spectrograms, (0, right_pad), "constant", 0)
 
         # Compute segments for each spectrogram and stack them on the batch dimension
         # to obtain a tensor of size [B * N, M, S]
         segments_list = [
-            s.unfold(-1, self.segment_length, self.segment_length // 2).transpose(0, 1)
+            s.unfold(-1, self.segment_length,
+                     self.segment_length // 2).transpose(0, 1)
             for s in padded_spectrograms
         ]
         segments = torch.cat(segments_list)
@@ -135,7 +141,8 @@ class DVectorBaseline(nn.Module):
 
         # Collapse LSTM hidden states by either averaging or taking the last
         # [B * N, S, H] -> [B * N, H]
-        outputs = outputs.mean(dim=1) if self.lstm_average else outputs[:, -1, :]
+        outputs = outputs.mean(
+            dim=1) if self.lstm_average else outputs[:, -1, :]
 
         # Project hidden states to the embedding size
         # [B * N, H] -> [B * N, E]
@@ -143,7 +150,8 @@ class DVectorBaseline(nn.Module):
 
         # Compute the average embedding over all segments in each spectrogram
         # [B * N, E] -> [B, E]
-        batch_size, num_segments = spectrograms.size(0), segments_list[0].size(0)
+        batch_size, num_segments = spectrograms.size(
+            0), segments_list[0].size(0)
         embeddings = segments_embedding.reshape(
             batch_size, num_segments, self.embedding_size
         ).mean(dim=1)
@@ -224,7 +232,8 @@ class TitaNet(nn.Module):
         divide it by the given number
         """
         return (
-            sum([np.prod(p.size()) for p in self.parameters() if p.requires_grad]) / div
+            sum([np.prod(p.size())
+                for p in self.parameters() if p.requires_grad]) / div
         )
 
     @classmethod
@@ -367,7 +376,8 @@ class Encoder(nn.Module):
         super(Encoder, self).__init__()
 
         # Define encoder as sequence of prolog, mega blocks and epilog
-        self.prolog = modules.ConvBlock1d(n_mels, hidden_size, prolog_kernel_size)
+        self.prolog = modules.ConvBlock1d(
+            n_mels, hidden_size, prolog_kernel_size)
         self.mega_blocks = nn.Sequential(
             *[
                 MegaBlock(
@@ -381,7 +391,8 @@ class Encoder(nn.Module):
                 for _ in range(n_mega_blocks)
             ]
         )
-        self.epilog = modules.ConvBlock1d(hidden_size, output_size, epilog_kernel_size)
+        self.epilog = modules.ConvBlock1d(
+            hidden_size, output_size, epilog_kernel_size)
 
     def forward(self, spectrograms):
         """
@@ -502,7 +513,8 @@ class Decoder(nn.Module):
             )
         else:
             self.pool = nn.Sequential(
-                AttentiveStatsPooling(encoder_output_size, attention_hidden_size),
+                AttentiveStatsPooling(
+                    encoder_output_size, attention_hidden_size),
                 nn.BatchNorm1d(encoder_output_size * 2),
             )
 
