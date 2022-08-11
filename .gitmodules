@@ -1,6 +1,6 @@
-[submodule "losses/pytorch-metric-learning"]
-	path = losses/pytorch-metric-learning
+[submodule "src/losses/pytorch-metric-learning"]
+	path = src/losses/pytorch-metric-learning
 	url = https://github.com/KevinMusgrave/pytorch-metric-learning.git
-[submodule "processing/torch-audiomentations"]
-	path = processing/torch-audiomentations
+[submodule "src/processing/torch-audiomentations"]
+	path = src/processing/torch-audiomentations
 	url = https://github.com/asteroid-team/torch-audiomentations.git
