@@ -1,24 +1,26 @@
-import argparse
+import os
 import csv
 import importlib
 import itertools
-import math
-import os
-from pathlib import Path
-
 import numpy as np
+
+import math
+import argparse
+from pathlib import Path
+from tqdm.auto import tqdm
+
 import onnx
 import onnxruntime as onnxrt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.cuda.amp import GradScaler, autocast
-from torchsummary import summary
-from tqdm.auto import tqdm
 
-from dataloader import test_data_loader, worker_init_fn
+from torch.cuda.amp import autocast, GradScaler
+from torchsummary import summary
+
 from processing.audio_loader import loadWAV
-from utils import cprint, read_config, similarity_measure
+from utils import (similarity_measure, cprint, read_config)
+from dataloader import test_data_loader, worker_init_fn
 
 
 class WrappedModel(nn.Module):
