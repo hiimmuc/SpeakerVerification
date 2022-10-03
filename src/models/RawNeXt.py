@@ -1,11 +1,9 @@
 import math
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from .NeXt_utils import *
-
 
 class Root(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, residual):
@@ -19,7 +17,7 @@ class Root(nn.Module):
 
     def forward(self, *x):
         children = x
-
+        
         x = self.conv(torch.cat(x, 1))
         x = self.bn(x)
         if self.residual:
@@ -27,30 +25,27 @@ class Root(nn.Module):
         x = self.relu(x)
         return x
 
-
 class Tree(nn.Module):
     def __init__(self, levels, block, in_channels, out_channels, stride=1,
                  level_root=False, root_dim=0, root_kernel_size=1,
-                 dilation=1, root_residual=False, dsp=True, up_path=True, gate=True):
+                 dilation=1, root_residual=False, dsp = True, up_path = True, gate = True):
         super(Tree, self).__init__()
         if root_dim == 0:
             root_dim = 2 * out_channels
         if level_root:
             root_dim += in_channels
         if levels == 1:
-            self.tree1 = block(in_channels, out_channels,
-                               dilation=dilation, dsp=dsp, up_path=up_path, gate=gate)
-            self.tree2 = block(out_channels, out_channels,
-                               dilation=dilation, dsp=dsp, up_path=up_path, gate=gate)
+            self.tree1 = block(in_channels, out_channels, dilation=dilation, dsp = dsp, up_path = up_path, gate = gate)
+            self.tree2 = block(out_channels, out_channels, dilation=dilation, dsp = dsp, up_path = up_path, gate = gate)
         else:
             self.tree1 = Tree(levels - 1, block, in_channels, out_channels,
                               stride, root_dim=0,
                               root_kernel_size=root_kernel_size,
-                              dilation=dilation, root_residual=root_residual, dsp=dsp, up_path=up_path, gate=gate)
+                              dilation=dilation, root_residual=root_residual, dsp = dsp, up_path = up_path, gate = gate)
             self.tree2 = Tree(levels - 1, block, out_channels, out_channels,
                               root_dim=root_dim + out_channels,
                               root_kernel_size=root_kernel_size,
-                              dilation=dilation, root_residual=root_residual, dsp=dsp, up_path=up_path, gate=gate)
+                              dilation=dilation, root_residual=root_residual, dsp = dsp, up_path = up_path, gate = gate)
         if levels == 1:
             self.root = Root(root_dim, out_channels, root_kernel_size,
                              root_residual)
@@ -59,7 +54,7 @@ class Tree(nn.Module):
         self.downsample = None
         self.project = None
         self.levels = levels
-
+    
         if in_channels != out_channels:
             self.project = nn.Sequential(
                 nn.Conv1d(in_channels, out_channels,
@@ -93,8 +88,7 @@ class RawNeXt(nn.Module):
     [1] Yu, Fisher, et al. 
     "Deep layer aggregation." CVPR. 2018.
     """
-
-    def __init__(self, levels, channels, code_dim=512, block=Bottleneck, residual_root=False, dsp=True, up_path=True, gate=True, **kwargs):
+    def __init__(self, levels, channels, code_dim=512, block=Bottleneck, residual_root=False, dsp = True, up_path = True, gate = True, **kwargs):
         super(RawNeXt, self).__init__()
 
         self.base_layer = nn.Sequential(
@@ -108,14 +102,15 @@ class RawNeXt(nn.Module):
         self.level1 = self._make_conv_level(
             channels[0], channels[1], levels[1])
         self.level2 = Tree(levels[2], block, channels[1], channels[2], 1,
-                           level_root=False, root_residual=residual_root, dsp=dsp, up_path=up_path, gate=gate)
+                           level_root=False, root_residual=residual_root, dsp = dsp, up_path = up_path, gate = gate)
         self.level3 = Tree(levels[3], block, channels[2], channels[3], 1,
-                           level_root=True, root_residual=residual_root, dsp=dsp, up_path=up_path, gate=gate)
+                           level_root=True, root_residual=residual_root, dsp = dsp, up_path = up_path, gate = gate)
         self.level4 = Tree(levels[4], block, channels[3], channels[4], 1,
-                           level_root=True, root_residual=residual_root, dsp=dsp, up_path=up_path, gate=gate)
+                           level_root=True, root_residual=residual_root, dsp = dsp, up_path = up_path, gate = gate)
         self.level5 = Tree(levels[5], block, channels[4], channels[5], 1,
-                           level_root=True, root_residual=residual_root, dsp=dsp, up_path=up_path, gate=gate)
+                           level_root=True, root_residual=residual_root, dsp = dsp, up_path = up_path, gate = gate)
 
+        
         self.attention = nn.Sequential(
             nn.Conv1d(channels[5], channels[5] // 8, kernel_size=1),
             nn.ReLU(inplace=True),
@@ -133,7 +128,7 @@ class RawNeXt(nn.Module):
 
         for m in self.modules():
             if isinstance(m, nn.Conv1d):
-                n = m.kernel_size[0] * m.out_channels
+                n = m.kernel_size[0]  * m.out_channels
                 m.weight.data.normal_(0, math.sqrt(2. / n))
             elif isinstance(m, nn.BatchNorm1d):
                 m.weight.data.fill_(1)
@@ -148,16 +143,15 @@ class RawNeXt(nn.Module):
                           padding=dilation, bias=False, dilation=dilation),
                 nn.BatchNorm1d(inplanes),
                 nn.ReLU(inplace=True)
-            ])
+                ])
             inplanes = planes
         return nn.Sequential(*modules)
 
-    def forward(self, x, do_infer=False):
+    def forward(self, x, do_infer = False):
         #####
         assert len(x.size()) == 2
         batch, n_sample = x.size()
-        x = x.repeat(batch, 59049//n_sample +
-                     1)[:, : 59049]  # 3^10 = 9^5 = 59049
+        x = x.repeat(batch, 59049//n_sample + 1)[:, : 59049] # 3^10 = 9^5 = 59049
         x = x.unsqueeze(1)
         ####
         x = self.base_layer(x)
@@ -165,16 +159,15 @@ class RawNeXt(nn.Module):
         for i in range(6):
             x = getattr(self, 'level{}'.format(i))(x)
             x = self.mp(x)
-
+        
         w = self.attention(x)
         m = torch.sum(x * w, dim=-1)
-        s = torch.sqrt(
-            (torch.sum((x ** 2) * w, dim=-1) - m ** 2).clamp(min=1e-5))
+        s = torch.sqrt((torch.sum((x ** 2) * w, dim=-1) - m ** 2).clamp(min=1e-5))
         x = torch.cat([m, s], dim=1)
-        x = self.bn_agg(x)
+        x =	self.bn_agg(x)
 
         code = self.fc(x)
-
+        
         code = self.bn_code(code)
 
         if do_infer:
@@ -183,20 +176,19 @@ class RawNeXt(nn.Module):
             code_norm = code.norm(p=2, dim=1, keepdim=True) / 9.0
             code = torch.div(code, code_norm)
             return code
-
-
+            
 def MainModel(nOut=512, **kwargs):
     levels = [1, 1, 1, 2, 2, 1]
-    channels = [128, 128, 256, 256, 512, 512]
-    dsp = True
-    up_path = True
-    gate = True
+    channels=[128, 128, 256, 256, 512, 512]
+    dsp=True
+    up_path=True
+    gate=True
     model = RawNeXt(
-        levels=levels,
-        channels=channels,
-        code_dim=nOut,
-        dsp=dsp,
-        up_path=up_path,
-        gate=gate,
-        **kwargs)
+                levels = levels,
+                channels = channels,
+                code_dim= nOut,
+                dsp = dsp,
+                up_path = up_path,
+                gate = gate,
+                **kwargs)
     return model

@@ -1,11 +1,11 @@
 import argparse
 import subprocess
 
-from dataprep import DataGenerator
 from export import *
 from inference import inference
+from dataprep import DataGenerator
 from trainer import train
-from utils import get_sys_information, read_config
+from utils import read_config, get_sys_information
 
 
 def main(args):
@@ -121,9 +121,9 @@ if __name__ == '__main__':
             subprocess.call(
                 f"cp -R {config_dir}/*.yaml {config_clone_path}", shell=True)
 
-    # parse metadata to save files
-    metadata_path = os.path.join(args.save_folder, 'metadata')
-    if os.path.exists(os.path.join(args.data_folder, 'metadata')) or os.path.exists(metadata_path):
+    # parse metadata to save files metadata_save_path = Path(self.args.train_annotation).parent
+    metadata_path = os.path.join(Path(args.train_annotation).parent.parent, 'metadata')
+    if os.path.exists(metadata_path):
         print("Metadata files are exist, skip preparing...")
     else:
         print("Metadata files are not exist, start preparing...")

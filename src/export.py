@@ -1,5 +1,3 @@
-import argparse
-import glob
 import os
 import sys
 import time
@@ -7,8 +5,9 @@ from pathlib import Path
 
 import torch
 import torch.nn.functional as F
-
-from model import ModelHandling, SpeakerEncoder, WrappedModel
+from model import SpeakerEncoder, WrappedModel, ModelHandling
+import argparse
+import glob
 
 
 def export_model(args, check=True):

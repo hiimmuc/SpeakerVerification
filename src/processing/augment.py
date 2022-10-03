@@ -2,12 +2,12 @@
 import numpy as np
 import soundfile as sf
 from pydub import AudioSegment
+
 from scipy import signal
 from scipy.io import wavfile
 
 from .audio_signal import compute_amplitude
-from .wav_conversion import (normalize_audio_amp, np_to_segment, padding_np,
-                             segment_to_np)
+from .wav_conversion import np_to_segment, segment_to_np, padding_np, normalize_audio_amp
 
 # ====================================================Audio Augmentation utils==================================
 # Time domain

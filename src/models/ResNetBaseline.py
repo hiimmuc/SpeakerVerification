@@ -1,10 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 from models.OnStreamAugment.specaugment import SpecAugment
 
-from .ResNetBlocks import *
+from .blocks.ResNetBlocks import *
 
 # baseline for resnet
 
@@ -22,7 +21,7 @@ class ResNet(nn.Module):
         norm_layer: Optional[Callable[..., nn.Module]] = None,
     ) -> None:
         super().__init__()
-        _log_api_usage_once(self)
+        # _log_api_usage_once(self)
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
         self._norm_layer = norm_layer

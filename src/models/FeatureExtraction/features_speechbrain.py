@@ -33,10 +33,9 @@ Example
 Authors
  * Mirco Ravanelli 2020
 """
-import logging
 import math
-
 import torch
+import logging
 from packaging import version
 
 logger = logging.getLogger(__name__)

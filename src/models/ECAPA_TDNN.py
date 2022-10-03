@@ -7,10 +7,9 @@ import numpy as np
 import torch  # noqa: F401
 import torch.nn as nn
 import torch.nn.functional as F
-
-from models.ECAPA_utils import BatchNorm1d as _BatchNorm1d
-from models.ECAPA_utils import Conv1d as _Conv1d
-from models.ECAPA_utils import Linear, length_to_mask
+from models.layers.cnn import Conv1d as _Conv1d
+from models.layers.normalization import BatchNorm1d as _BatchNorm1d
+from models.layers.utils import Linear, length_to_mask
 from models.OnStreamAugment.specaugment import SpecAugment
 
 

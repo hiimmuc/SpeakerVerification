@@ -3,7 +3,6 @@
 import torch
 import torch.nn as nn
 from asteroid_filterbanks import Encoder, ParamSincFB
-
 from models.RawNet_baseline import Bottle2neck, PreEmphasis
 
 

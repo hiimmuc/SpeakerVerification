@@ -53,7 +53,7 @@ def random_augment_audio(audio_seg, setting):
 def loadWAV(audio_source, audio_spec=None,
             evalmode=True, num_eval=10,
             augment=False, augment_options=None, target_db=None,
-            read_mode='pydub', random_chunk=True, load_all=False, dtype=np.float32, ** kwargs):
+            read_mode='sf', random_chunk=True, load_all=False, dtype=np.float32, ** kwargs):
     '''Load audio form .wav file and return as the np array
 
     Args:
@@ -78,7 +78,7 @@ def loadWAV(audio_source, audio_spec=None,
     if isinstance(audio_source, str):
         audio_source = str(Path(audio_source))  # to compatible with most os
         if read_mode == 'sf':
-            audio, sr = sf.read(audio_source)
+            audio, sr = sf.read(audio_source, frames=-1, start=0, stop=None, dtype='float32', always_2d=False, fill_value=None, out=None, samplerate=None, channels=None, format=None, subtype=None, endian=None, closefd=True)
         else:
             # read audio using Audio Segments
             audio_seg = AudioSegment.from_file(audio_source)

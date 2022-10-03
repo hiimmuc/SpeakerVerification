@@ -2,7 +2,6 @@ import math
 
 import torch
 import torch.nn as nn
-
 from models.Efficient_utils import (DropConnect, Flatten, SamePadConv2d,
                                     SEModule, conv_bn_act)
 from models.OnStreamAugment.specaugment import SpecAugment

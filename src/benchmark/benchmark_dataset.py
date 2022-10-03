@@ -1,18 +1,20 @@
 # benchmark dataset:
-import argparse
-import csv
-import glob
 import itertools
 import os
+import csv
 import time
-from pathlib import Path
+import glob
 
+import argparse
+from pathlib import Path
 import numpy as np
 from pydub import AudioSegment
-from tqdm.auto import tqdm
+from model import SpeakerEncoder, WrappedModel, ModelHandling
 
-from model import ModelHandling, SpeakerEncoder, WrappedModel
-from utils import read_config, similarity_measure, tuneThresholdfromScore
+from tqdm.auto import tqdm
+from utils import similarity_measure
+from utils import read_config, tuneThresholdfromScore
+
 
 
 def all_pairs(lst):
@@ -20,7 +22,7 @@ def all_pairs(lst):
 
 
 def check_matching(ref_emb, com_emb, threshold=0.5):
-    score = similarity_measure(method='cosine', ref=ref_emb, com=com_emb)
+    score = similarity_measure(method='cosine',ref= ref_emb, com=com_emb)
     ratio = threshold / 0.5
     result = (score / ratio) if (score / ratio) < 1 else 1
     matching = result > 0.5
@@ -35,6 +37,7 @@ def benchmark_dataset_by_model(model_path=None,
     # load model
     args = read_config(config_path)
     args = argparse.Namespace(**args)
+    
 
     t0 = time.time()
     net = WrappedModel(SpeakerEncoder(**vars(args)))
@@ -80,15 +83,12 @@ def benchmark_dataset_by_model(model_path=None,
                     f.write(f"[{imposters[imp]}/{len(filepaths)}] - {imp}\n")
                 f.write("//================//\n")
 
-
+                
 if __name__ == '__main__':
-    model_path = str(
-        Path('backup/2811/save/Raw_ECAPA_hype/AAmSoftmaxAP/model/best_state.pt'))
-    config_path = str(
-        Path('backup/2811/save/Raw_ECAPA_hype/AAmSoftmaxAP/config/configuration.yaml'))
-    threshold = 0.4
-    root = 'dataset/train_data/gannhan_bm/wav/'
-    save_file = 'benchmark_result.txt'
-
-    benchmark_dataset_by_model(
-        model_path, config_path, threshold, root, save_file)
+    model_path = str(Path('backup/2811/save/Raw_ECAPA_hype/AAmSoftmaxAP/model/best_state.pt'))
+    config_path=str(Path('backup/2811/save/Raw_ECAPA_hype/AAmSoftmaxAP/config/configuration.yaml'))
+    threshold=0.4
+    root='dataset/train_data/gannhan_bm/wav/'
+    save_file='benchmark_result.txt'
+    
+    benchmark_dataset_by_model(model_path, config_path, threshold, root, save_file)

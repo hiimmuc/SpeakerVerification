@@ -120,8 +120,7 @@ class Bottle2neck(nn.Module):
 
         if inplanes != planes:  # if change in number of filters
             self.residual = nn.Sequential(
-                nn.Conv1d(inplanes, planes, kernel_size=1,
-                          stride=1, bias=False)
+                nn.Conv1d(inplanes, planes, kernel_size=1, stride=1, bias=False)
             )
         else:
             self.residual = nn.Identity()
@@ -159,8 +158,7 @@ class Bottle2neck(nn.Module):
         out = self.afms(out)
 
         return out
-
-
+    
 class FRM(nn.Module):
     def __init__(self, nb_dim, do_add=True, do_mul=True):
         super(FRM, self).__init__()
@@ -272,8 +270,7 @@ class SincConv_fast(nn.Module):
         if in_channels != 1:
             # msg = (f'SincConv only support one input channel '
             #       f'(here, in_channels = {in_channels:d}).')
-            msg = "SincConv only support one input channel (here, in_channels = {%i})" % (
-                in_channels)
+            msg = "SincConv only support one input channel (here, in_channels = {%i})" % (in_channels)
             raise ValueError(msg)
 
         self.out_channels = out_channels
@@ -313,17 +310,12 @@ class SincConv_fast(nn.Module):
 
         # Hamming window
         #self.window_ = torch.hamming_window(self.kernel_size)
-        # computing only half of the window
-        n_lin = torch.linspace(0, (self.kernel_size/2)-1,
-                               steps=int((self.kernel_size/2)))
-        self.window_ = 0.54 - 0.46 * \
-            torch.cos(2 * math.pi * n_lin / self.kernel_size)  # hanning window
+        n_lin = torch.linspace(0, (self.kernel_size/2)-1, steps=int((self.kernel_size/2)))  # computing only half of the window
+        self.window_ = 0.54 - 0.46 * torch.cos(2 * math.pi * n_lin / self.kernel_size) # hanning window
 
         # (1, kernel_size/2)
         n = (self.kernel_size - 1) / 2.0
-        # Due to symmetry, I only need half of the time axes
-        self.n_ = 2 * math.pi * \
-            torch.arange(-n, 0).view(1, -1) / self.sample_rate
+        self.n_ = 2 * math.pi * torch.arange(-n, 0).view(1, -1) / self.sample_rate  # Due to symmetry, I only need half of the time axes
 
     def forward(self, waveforms):
         """
@@ -346,21 +338,18 @@ class SincConv_fast(nn.Module):
 
         low = self.min_low_hz + torch.abs(low_hz_)
 
-        high = torch.clamp(low + self.min_band_hz +
-                           torch.abs(band_hz_), self.min_low_hz, self.sample_rate/2)
+        high = torch.clamp(low + self.min_band_hz + torch.abs(band_hz_), self.min_low_hz, self.sample_rate/2)
         band = (high-low)[:, 0]
 
         f_times_t_low = torch.matmul(low, self.n_)
         f_times_t_high = torch.matmul(high, self.n_)
 
         # Equivalent of Eq.4 of the reference paper (SPEAKER RECOGNITION FROM RAW WAVEFORM WITH SINCNET). I just have expanded the sinc and simplified the terms. This way I avoid several useless computations.
-        band_pass_left = ((torch.sin(f_times_t_high) -
-                          torch.sin(f_times_t_low))/(self.n_/2))*self.window_
+        band_pass_left = ((torch.sin(f_times_t_high)-torch.sin(f_times_t_low))/(self.n_/2))*self.window_
         band_pass_center = 2*band.view(-1, 1)
         band_pass_right = torch.flip(band_pass_left, dims=[1])
 
-        band_pass = torch.cat(
-            [band_pass_left, band_pass_center, band_pass_right], dim=1)
+        band_pass = torch.cat([band_pass_left, band_pass_center, band_pass_right], dim=1)
 
         band_pass = band_pass / (2*band[:, None])
 
@@ -430,23 +419,20 @@ class Residual_block_wFRM(nn.Module):
         out = self.frm(out)
         return out
 
-# SAP
-
-
+## SAP
 class Classic_Attention(nn.Module):
-    def __init__(self, input_dim, embed_dim, attn_dropout=0.0):
+    def __init__(self,input_dim, embed_dim, attn_dropout=0.0):
         super().__init__()
         self.embed_dim = embed_dim
         self.attn_dropout = attn_dropout
-        self.lin_proj = nn.Linear(input_dim, embed_dim)
+        self.lin_proj = nn.Linear(input_dim,embed_dim)
         self.v = torch.nn.Parameter(torch.randn(embed_dim))
-
-    def forward(self, inputs):
+    
+    def forward(self,inputs):
         lin_out = self.lin_proj(inputs)
-        v_view = self.v.unsqueeze(0).expand(
-            lin_out.size(0), len(self.v)).unsqueeze(2)
+        v_view = self.v.unsqueeze(0).expand(lin_out.size(0), len(self.v)).unsqueeze(2)
         attention_weights = torch.tanh(lin_out.bmm(v_view).squeeze())
-        attention_weights_normalized = F.softmax(attention_weights, 1)
+        attention_weights_normalized = F.softmax(attention_weights,1)
         return attention_weights_normalized
 
 
@@ -460,15 +446,16 @@ class ScaledDotProduct_attention(nn.Module):
         self.embed_dim = embed_dim
         self.attn_dropout = attn_dropout
         self.scaling = self.embed_dim ** -0.5
-
+    
+    
         self.in_proj_weight = Parameter(torch.Tensor(2 * embed_dim, embed_dim))
         self.register_parameter('in_proj_bias', None)
-
+        
         self.reset_parameters()
-
+        
         self.in_proj_weight = Parameter(torch.Tensor(2 * embed_dim, embed_dim))
         self.in_proj_bias = Parameter(torch.Tensor(2 * embed_dim))
-
+        
     def _in_proj(self, input, start=0, end=None, **kwargs):
         weight = kwargs.get('weight', self.in_proj_weight)
         bias = kwargs.get('bias', self.in_proj_bias)
@@ -476,26 +463,25 @@ class ScaledDotProduct_attention(nn.Module):
         if bias is not None:
             bias = bias[start:end]
         return F.linear(input, weight, bias)
-
+        
     def in_proj_qk(self, query):
         return self._in_proj(query).chunk(2, dim=-1)
-
+    
     def reset_parameters(self):
         nn.init.xavier_uniform_(self.in_proj_weight)
         if self.in_proj_bias is not None:
             nn.init.constant_(self.in_proj_bias, 0.)
-
-    def forward(self, query, key):
+        
+    def forward(self,query,key):
         tgt_len, bsz, embed_dim = query.size()
         assert embed_dim == self.embed_dim
         assert list(query.size()) == [tgt_len, bsz, embed_dim]
         q, k = self.in_proj_qk(query)
         q *= self.scaling
-        return q, k
-        attn_weights = torch.bmm(q, k.transpose(1, 2))
+        return q,k
+        attn_weights = torch.bmm(q, k.transpose(1, 2))    
         return attn_weights
-
-
+    
 class RawNet2(nn.Module):
     def __init__(self, filters, nb_classes=400,
                  nb_gru_layer=1, gru_node=1024,
@@ -508,9 +494,8 @@ class RawNet2(nn.Module):
         super(RawNet2, self).__init__()
         hoplength = 10e-3 * int(kwargs['sample_rate'])
         winlength = 25e-3 * int(kwargs['sample_rate'])
-
-        nb_samp = int(int(kwargs['sample_rate']) *
-                      (kwargs['max_frames']/100)) + int(winlength - hoplength)
+        
+        nb_samp = int(int(kwargs['sample_rate']) * (kwargs['max_frames']/100)) + int(winlength - hoplength)
         # self.device = device
         self.ln = LayerNorm(nb_samp)
         self.first_conv = SincConv_fast(in_channels=in_channels,
@@ -523,8 +508,7 @@ class RawNet2(nn.Module):
         self.lrelu = nn.LeakyReLU()
         self.lrelu_keras = nn.LeakyReLU(negative_slope=0.3)
 
-        self.block0 = nn.Sequential(
-            Residual_block_wFRM(nb_filts=filters[1], first=True))
+        self.block0 = nn.Sequential(Residual_block_wFRM(nb_filts=filters[1], first=True))
         self.block1 = nn.Sequential(Residual_block_wFRM(nb_filts=filters[1]))
 
         self.block2 = nn.Sequential(Residual_block_wFRM(nb_filts=filters[2]))

@@ -12,33 +12,34 @@
 ###
 
 device: "cuda"
-seed: 20220720
+seed: 20220808
 
 ## Directories
-output_folder: !ref backup/<seed>
+output_folder: !ref backup_vlsp/<seed>
 save_folder: !ref <output_folder>/save
 train_log: !ref <output_folder>/train_log.txt
 
 ## Paths
 skip_prep: True
-data_folder: dataset/train_data/Vlsp_train
+data_folder: /workspace/data_nas04/SpeakerVerification/dataset/VLSP/Vlsp_train
 train_annotation: !ref <save_folder>/metadata/train.csv
 valid_annotation: !ref <save_folder>/metadata/dev.csv
+
 ## sample path for testin
 # test gan nhan: dataset/test_data/test_cskh_labeled/test_cskh_trial_file.txt
 # test callbot: dataset/test_data/test_callbot_raw/test_cb_v1_changepath.txt
 # test thuc te: log_service/check_log_combine/equitable_test_truth.txt
-evaluation_file: !ref <valid_annotation>
-verification_file: dataset/test_data/VLSP_public_test/public_test_pairs_change_path.txt
+evaluation_file: dataset/test_data/test_callbot_raw/test_cb_v1_changepath.txt
+verification_file: /workspace/data_nas04/SpeakerVerification/namdp5/code/dataset/test_data/public_test_pairs_cp.txt
 noise_folder: dataset/augment_data/16kHz
 
 ckpt_interval_minutes: -1 # save checkpoint every N min, -1 to turn off
 save_model_last: True
 
 ## Training parameters
-number_of_epochs: 250 # max_epoch
-batch_size: 16 # batch_size
-lr: 0.003
+number_of_epochs: 500 # max_epoch
+batch_size: 32 # batch_size
+lr: 0.006
 base_lr: 0.00000001 # min_lr
 max_lr: !ref <lr> # max lr for callbacks
 step_size: 10 # depends on the callbacks, step size equal [2, 4, 6, 8] * len(train dataset) / (batch_size * n_pgu * n_spk)
@@ -73,7 +74,7 @@ lib: nnaudio
 
 ## Model definition
 model:
-  name: Raw3_ECAPA
+  name: RawNet2_custom
   feature_type: !ref <features>
   nOut: 512 #lin neurons
   
@@ -88,7 +89,7 @@ classifier:
 
 ## criterion
 criterion:
-  name: ARmSoftmax
+  name: AAmSoftmaxAP
   margin: 0.2
   scale: 30
   hard_prob: 0.5
@@ -98,7 +99,7 @@ criterion:
 
 ## optimizer
 optimizer:
-  name: AdaBelief
+  name: adam
   weight_decay: 0.00002
   lr_decay: 0.95
 
@@ -115,6 +116,7 @@ es_patience: 15
 ## Using pretrain
 pretrained:
   use: True
+  # path: backup/1001/Raw_ECAPA/ARmSoftmax/model/best_state_top4_copy_1.pt
   path: !ref <save_folder>/<model[name]>/<criterion[name]>/model/best_state.pt 
   
 ## Augment options
@@ -124,15 +126,15 @@ augment_options:
     musan: !ref <noise_folder>/musan_split
     noise_vad: !ref <noise_folder>/noise_vad
     rirs: !ref <noise_folder>/RIRS_NOISES
-  augment_chain: ["env_corrupt"] # available: ["env_corrupt", "time_domain", "spec_domain"]
+  augment_chain: ["env_corrupt", "time_domain"] # available: ["env_corrupt", "time_domain", "spec_domain"]
   noise_sets: ["noise", "speech", "music", "noise_vad", "noise_rirs"]
-  noise_proportion: [0.3, 0.2, 0.2, 0, 0.3]
+  noise_proportion: [0.2, 0.1, 0.2, 0.25, 0.25]
   noise_snr:
     noise: [0, 5]
     speech: [3, 20]
     music: [5, 15]
-    noise_vad: [0, 5]
-    noise_rirs: [0, 5 ]
+    noise_vad: [3, 15]
+    noise_rirs: [3, 15]
   noise_samples:
     noise: [1, 1]
     speech: [3, 7]

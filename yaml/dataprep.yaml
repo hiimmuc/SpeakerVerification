@@ -12,25 +12,27 @@
 ###
 
 device: "cuda"
-seed: 1
+seed: 20220928
+version: 1
 
 ## Directories
-output_folder: !ref backup/<seed>
-save_folder: !ref <output_folder>/save
+output_folder: !ref code_namdp5/backup_vlsp_2022/<seed>/
+save_folder: !ref <output_folder>/versions/<version>
 train_log: !ref <output_folder>/train_log.txt
 
 ## Paths
 skip_prep: True
-data_folder: dataset/train_data/viettel_cskh_callbot
+data_folder: /workspace/data_nas04/SpeakerVerification/dataset/VLSP/VLSP_2022/youtube/fr, /workspace/data_nas04/SpeakerVerification/dataset/VLSP/VLSP_2022/youtube/th, /workspace/data_nas04/SpeakerVerification/dataset/VLSP/VLSP_2022/youtube/ta, /workspace/data_nas04/SpeakerVerification/dataset/VLSP/VLSP_2022/youtube/en, /workspace/data_nas04/SpeakerVerification/dataset/VLSP/VLSP_2022/youtube/hi, /workspace/data_nas04/SpeakerVerification/dataset/VLSP/VLSP_2022/youtube/vi, /workspace/data_nas04/SpeakerVerification/dataset/VLSP/VLSP_2022/youtube/uz, /workspace/data_nas04/SpeakerVerification/dataset/VLSP/VLSP_2022/youtube/zh, /workspace/data_nas04/SpeakerVerification/dataset/VLSP/VLSP_2022/youtube/ja
+
 train_annotation: !ref <save_folder>/metadata/train.csv
 valid_annotation: !ref <save_folder>/metadata/dev.csv
 ## sample path for testin
 # test gan nhan: dataset/test_data/test_cskh_labeled/test_cskh_trial_file.txt
 # test callbot: dataset/test_data/test_callbot_raw/test_cb_v1_changepath.txt
-# test thuc te: log_service/check_log_combine/equitable_test_truth.txt
-evaluation_file: dataset/test_data/test_callbot_raw/test_cb_v1_changepath.txt
-verification_file: log_service/check_log_combine/equitable_test.txt
-noise_folder: dataset/augment_data
+# test thuc te: /workspace/data_nas04/SpeakerVerification/namdp5/code/dataset/test_data/Track12_blind_cp.txt /workspace/data_nas04/SpeakerVerification/namdp5/code/dataset/test_data/voxsrc2021_blind_cp.txt
+evaluation_file: /workspace/data_nas04/SpeakerVerification/namdp5/code/dataset/test_data/voxsrc2022_dev_cp.txt
+verification_file: /workspace/data_nas04/SpeakerVerification/namdp5/code/dataset/test_data/Track12_blind_cp.txt 
+noise_folder: /workspace/data_nas04/SpeakerVerification/dataset/augment_data/16kHz
 
 ckpt_interval_minutes: -1 # save checkpoint every N min, -1 to turn off
 save_model_last: True
@@ -59,7 +61,7 @@ dataloader_options:
 
 ## Audio parameters
 audio_spec:
-  sample_rate: 8000 # sample_rate
+  sample_rate: 16000 # sample_rate
   channels: 1
   sentence_len: 2.0 # seconds max_frames
   win_len: 0.025

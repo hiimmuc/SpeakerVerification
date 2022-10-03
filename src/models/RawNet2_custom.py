@@ -12,10 +12,8 @@ from torch.autograd import Variable
 from torch.nn.parameter import Parameter
 from torch.utils import data
 from torchsummary import summary
-
-from models.RawNet_baseline import *
 from utils import *
-
+from models.RawNet_baseline import *
 
 class RawNet2(nn.Module):
     """
@@ -31,7 +29,7 @@ class RawNet2(nn.Module):
                  code_dim=512,
                  in_channels=1,
                  log_input=True,
-                 nb_gru_layers=1,
+                 nb_gru_layers=1, 
                  gru_node=1024,
                  first_conv_size=251,
                  **kwargs):
@@ -39,7 +37,7 @@ class RawNet2(nn.Module):
 
         self.inplanes = nb_filters[0]
         self.log_input = log_input
-
+    
         #####
         # first layers before residual blocks
         #####
@@ -50,7 +48,7 @@ class RawNet2(nn.Module):
                 nb_filters[0],
                 kernel_size=3,
                 stride=3,
-                padding=0
+                padding=0        
             )
         elif self.front_proc == 'sinc':
             #  sinc layer
@@ -64,8 +62,8 @@ class RawNet2(nn.Module):
                                             out_channels=nb_filters[0],
                                             kernel_size=first_conv_size,
                                             sample_rate=int(sample_rate),
-                                            stride=1, padding=0, dilation=1,
-                                            bias=False, groups=1,
+                                            stride=1, padding=0, dilation=1, 
+                                            bias=False, groups=1, 
                                             min_low_hz=50, min_band_hz=50)
 
             self.first_bn = nn.BatchNorm1d(nb_filters[0])
@@ -79,9 +77,9 @@ class RawNet2(nn.Module):
         self.layer4 = self._make_layer(block, nb_filters[3], layers[3])
         self.layer5 = self._make_layer(block, nb_filters[4], layers[4])
         self.layer6 = self._make_layer(block, nb_filters[5], layers[5])
-
+        
         #####
-        # Aggregation layer
+        ## Aggregation layer
         #####
         self.aggregate = aggregate
         if self.aggregate == 'gru':
@@ -95,13 +93,12 @@ class RawNet2(nn.Module):
 
             self.fc_after_gru = nn.Linear(in_features=gru_node,
                                           out_features=code_dim)
-
+            
         elif self.aggregate == 'sap':
             # SAP: statistic attentive pooling
             self.bn_before_agg = nn.BatchNorm1d(nb_filters[5])
-            self.attention_sap = Classic_Attention(
-                nb_filters[5], nb_filters[5])
-
+            self.attention_sap = Classic_Attention(nb_filters[5], nb_filters[5])           
+            
         else:
             # aggregate to utterance(segment)-level asp
             self.bn_before_agg = nn.BatchNorm1d(nb_filters[5])
@@ -111,8 +108,8 @@ class RawNet2(nn.Module):
                 nn.BatchNorm1d(att_dim),
                 nn.Conv1d(att_dim, nb_filters[5], kernel_size=1),
                 nn.Softmax(dim=-1),
-            )
-
+            )       
+  
         #####
         # speaker embedding layer
         #####
@@ -135,6 +132,7 @@ class RawNet2(nn.Module):
 
         self.sig = nn.Sigmoid()
 
+
     def _make_layer(self, block, planes, nb_layer, downsample_all=False):
         if downsample_all:
             downsamples = [True] * (nb_layer)
@@ -145,39 +143,38 @@ class RawNet2(nn.Module):
             layers.append(block(self.inplanes, planes, downsample=d))
             self.inplanes = planes
         return nn.Sequential(*layers)
-
+    
     def weighted_sd(self, inputs, attention_weights, mean):
-        el_mat_prod = torch.mul(inputs, attention_weights.unsqueeze(
-            2).expand(-1, -1, inputs.shape[-1]))
-        hadmard_prod = torch.mul(inputs, el_mat_prod)
-        variance = torch.sum(hadmard_prod, 1) - torch.mul(mean, mean)
+        el_mat_prod = torch.mul(inputs,attention_weights.unsqueeze(2).expand(-1,-1,inputs.shape[-1]))
+        hadmard_prod = torch.mul(inputs,el_mat_prod)
+        variance = torch.sum(hadmard_prod,1) - torch.mul(mean,mean)
         return variance
-
-    def stat_attn_pool(self, inputs, attention_weights):
-        el_mat_prod = torch.mul(inputs, attention_weights.unsqueeze(
-            2).expand(-1, -1, inputs.shape[-1]))
-        mean = torch.mean(el_mat_prod, 1)
-        variance = self.weighted_sd(inputs, attention_weights, mean)
-        stat_pooling = torch.cat((mean, variance), 1)
+    
+    
+    def stat_attn_pool(self,inputs,attention_weights):
+        el_mat_prod = torch.mul(inputs,attention_weights.unsqueeze(2).expand(-1,-1,inputs.shape[-1]))
+        mean = torch.mean(el_mat_prod,1)
+        variance = self.weighted_sd(inputs,attention_weights,mean)
+        stat_pooling = torch.cat((mean,variance),1)
         return stat_pooling
 
     def forward(self, x):
         #####
         # first layers before residual blocks
         #####
-
+        
         if self.front_proc == 'conv':
-            x = x.unsqueeze(1)  # batch, n_samples -> batch, 1, n_samples
+            x = x.unsqueeze(1) # batch, n_samples -> batch, 1, n_samples
             # conv
             x = self.conv1(x)
         elif self.front_proc == 'sinc':
-            x = self.ln(x)
+            x = self.ln(x)           
             x = x.unsqueeze(1)
             # sinc
             x = F.max_pool1d(torch.abs(self.first_conv(x)), 3)
             x = self.first_bn(x)
             x = self.lrelu(x)
-
+        
         #####
         # frame-level
         #####
@@ -187,32 +184,29 @@ class RawNet2(nn.Module):
         x = self.layer4(x)
         x = self.layer5(x)
         x = self.layer6(x)
-
+        
         if self.aggregate == 'gru':
             #####
             # gru
             #####
             x = self.bn_before_gru(x)
             x = self.lrelu(x)
-            # (batch, filt, time) >> (batch, time, filt)
-            x = x.permute(0, 2, 1)
+            x = x.permute(0, 2, 1)  # (batch, filt, time) >> (batch, time, filt)
             self.gru.flatten_parameters()
             x, _ = self.gru(x)
             x = x[:, -1, :]
-
-            x = self.fc_after_gru(x)  # speaker embedding layer
-
+            x = self.fc_after_gru(x) # speaker embedding layer
+            
         elif self.aggregate == 'sap':
             x = self.bn_before_agg(x)
             x = self.lrelu(x)
-            # (batch, filt, time) >> (batch, time, filt)
-            x = x.permute(0, 2, 1)
+            x = x.permute(0, 2, 1)  # (batch, filt, time) >> (batch, time, filt)
             w = self.attention_sap(x)
             x = self.stat_attn_pool(x, w)
-
+            
             x = self.fc(x)
-            # x = self.fc2(x)
-
+            # x = self.fc2(x)           
+            
         else:
             assert self.aggregate == 'asp'
             #####
@@ -226,10 +220,10 @@ class RawNet2(nn.Module):
                 (torch.sum((x ** 2) * w, dim=-1) - m ** 2).clamp(min=1e-5))
             x = torch.cat([m, s], dim=1)
             x = x.view(x.size(0), -1)
+            
+            x = self.fc(x) # speaker embedding layer        
 
-            x = self.fc(x)  # speaker embedding layer
-
-        x = x.squeeze()
+        x = x.squeeze() 
         return x
 
 

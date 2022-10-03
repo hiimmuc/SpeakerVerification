@@ -1,4 +1,3 @@
-import argparse
 import csv
 import glob
 import os
@@ -17,7 +16,9 @@ from sklearn.metrics import (accuracy_score, classification_report,
 from tqdm import tqdm
 
 from inference import *
-from model import ModelHandling, SpeakerEncoder, WrappedModel
+
+import argparse
+from model import SpeakerEncoder, WrappedModel, ModelHandling
 from utils import read_config, tuneThresholdfromScore
 
 
@@ -26,25 +27,25 @@ def bendmark_models(model_dir, verification_config_file):
         glob.glob(model_dir + '/*.model')
     scoring_mode = 'cosine'
     num_eval = 20
-
+    
     args = read_config(verification_config_file)
     args = argparse.Namespace(**args)
 
     for model_path in tqdm(model_paths):
         chosen_model_state = model_path
-
+        
         args.initial_model_infer = chosen_model_state
 
         net = WrappedModel(SpeakerEncoder(**vars(args)))
         max_iter_size = args.step_size
-
+    
         model = ModelHandling(net, **dict(vars(args), T_max=max_iter_size))
-
+        
         model_save_path = os.path.join(
-            args.save_folder, f"{args.model['name']}/{args.criterion['name']}/model")
+        args.save_folder, f"{args.model['name']}/{args.criterion['name']}/model")
         result_save_path = os.path.join(
-            args.save_folder, f"{args.model['name']}/{args.criterion['name']}/result")
-
+        args.save_folder, f"{args.model['name']}/{args.criterion['name']}/result")
+        
         # Write args to score_file
         settings_file = open(result_save_path + '/settings.txt', 'a+')
         score_file = open(result_save_path + "/Inference_log.txt", "a+")
@@ -53,7 +54,7 @@ def bendmark_models(model_dir, verification_config_file):
 
         model.loadParameters(chosen_model_state)
         model.__model__.eval()
-
+        
         # eval model to have the threshold
         sc, lab, trials = model.evaluateFromList(
             listfilename=args.evaluation_file,
@@ -81,7 +82,7 @@ def bendmark_models(model_dir, verification_config_file):
               f">> EER {result['roc'][1]}% at threshold {result['roc'][-1]}\n",
               f">> Gmean result: \n>>> EER: {(1 - result['gmean'][1]) * 100}% at threshold {result['gmean'][2]}\n>>> ACC: {result['gmean'][1] * 100}%\n",
               f">> F-score {result['prec_recall'][2]}% at threshold {result['prec_recall'][-1]}\n")
-        threshold_set = result['gmean'][-1]
+        threshold_set =  result['gmean'][-1]
         # write to file
         write_file = Path(result_save_path, 'evaluation_results.txt')
 
@@ -107,7 +108,7 @@ def bendmark_models(model_dir, verification_config_file):
                 print(f"F-{b}:", prec_recall[2][b])
 
         # Testmodel
-
+ 
         model.testFromList(args.verification_file,
                            thresh_score=threshold_set,
                            output_file=args.log_test_files['com'],
@@ -115,10 +116,9 @@ def bendmark_models(model_dir, verification_config_file):
                            dataloader_options=args.dataloader_options,
                            cohorts_path=args.cohorts_path,
                            num_eval=args.num_eval,
-                           scoring_mode=scoring_mode)
-
-        roc, prec_recall = evaluate_result(
-            path=args.log_test_files['com'], ref=args.log_test_files['ref'])
+                           scoring_mode=scoring_mode)       
+        
+        roc, prec_recall = evaluate_result(path=args.log_test_files['com'], ref=args.log_test_files['ref'])
         test_log_file.writelines([f">{time.strftime('%Y-%m-%d %H:%M:%S')}<",
                                   f"Test result on: [{args.verification_file}] with [{args.initial_model_infer}]\n",
                                   f"Threshold: {threshold_set}\n",

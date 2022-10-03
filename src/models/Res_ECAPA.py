@@ -2,12 +2,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from models.ECAPA_TDNN import *
 from models.OnStreamAugment.specaugment import SpecAugment
+from models.ECAPA_TDNN import *
 from models.ResNetBlocks import SEBasicBlock, SEBottleneck
 
 
-# baseline for se resnet
+## baseline for se resnet
 class ResNetSE_no_head(nn.Module):
     def __init__(self,
                  block,
@@ -19,40 +19,40 @@ class ResNetSE_no_head(nn.Module):
         super(ResNetSE_no_head, self).__init__()
 
         self.aug = kwargs['augment']
-        self.aug_chain = kwargs['augment_options']['augment_chain']
+        self.aug_chain = kwargs['augment_options']['augment_chain']    
         self.kwargs = kwargs
-
+        
         self.inplanes = num_filters[0]
         self.n_mels = n_mels
 
         self.conv1 = nn.Conv2d(1,
                                num_filters[0],
                                kernel_size=3,
-                               stride=(2, 1),
+                               stride=(2,1),
                                padding=1)
         self.relu = nn.ReLU(inplace=True)
         self.bn1 = nn.BatchNorm2d(num_filters[0])
         self.layers = []
-
+        
         self.layers.append(self._make_layer(block, num_filters[0], layers[0]))
         for i in range(len(layers) - 1):
-            self.layers.append(self._make_layer(block, num_filters[i + 1],
-                                                layers[i+1],
+            self.layers.append(self._make_layer(block, num_filters[i + 1], 
+                                                layers[i+1], 
                                                 stride=(1, 1)))
         self.resnet_se_module = nn.Sequential(*self.layers)
-
+        
         self.conv2 = nn.Conv2d(num_filters[-1],
                                nOut,
                                kernel_size=3,
-                               stride=(2, 1),
+                               stride=(2,1),
                                padding=1)
         self.relu2 = nn.ReLU(inplace=True)
         self.bn2 = nn.BatchNorm2d(nOut)
-
+                               
         self.specaug = SpecAugment()
-
-        self.instance_norm = nn.InstanceNorm1d(n_mels, affine=True,
-                                               eps=1e-05, momentum=0.1,
+        
+        self.instance_norm = nn.InstanceNorm1d(n_mels, affine=True, 
+                                               eps=1e-05, momentum=0.1, 
                                                track_running_stats=False)
 
         for m in self.modules():
@@ -90,26 +90,25 @@ class ResNetSE_no_head(nn.Module):
                 x = self.specaug(x)
             if self.kwargs['features'] == 'melspectrogram':
                 x = x + 1e-6
-                x = x.log()  # this will cause nan value for MFCC features
+                x = x.log() # this will cause nan value for MFCC features
                 x = x - torch.mean(x, dim=-1, keepdim=True)
             x = self.instance_norm(x)
-
+                
         x = x.unsqueeze(1)
 
-        assert len(x.size()) == 4  # batch x Channels x n_mels x n_frames
-
+        assert len(x.size()) == 4  # batch x Channels x n_mels x n_frames 
+        
         x = self.conv1(x)
         x = self.relu(x)
         x = self.bn1(x)
 
         x = self.resnet_se_module(x)
-
+                               
         x = self.conv2(x)
         x = self.relu2(x)
         x = self.bn2(x)
-
+                               
         return x
-
 
 class ECAPA_TDNN_core(torch.nn.Module):
     """An implementation of the speaker embedding model in a paper.
@@ -150,7 +149,7 @@ class ECAPA_TDNN_core(torch.nn.Module):
         assert len(channels) == len(kernel_sizes)
         assert len(channels) == len(dilations)
         self.channels = channels
-
+        
         self.blocks = nn.ModuleList()
 
         # The initial TDNN layer
@@ -239,23 +238,21 @@ class ECAPA_TDNN_core(torch.nn.Module):
 def MainModel(nOut=128, **kwargs):
     num_filters = [32, 64]
     num_layers = [2, 2]
-    res_blocks = ResNetSE_no_head(
-        SEBasicBlock, num_layers, num_filters, num_filters[-1], **kwargs)
-
+    res_blocks = ResNetSE_no_head(SEBasicBlock, num_layers, num_filters, num_filters[-1], **kwargs)
+    
     n_features = kwargs['n_mels'] if kwargs['features'] == 'melspectrogram' else kwargs['n_mfcc']
-    input_size_tdnn = int(
-        num_filters[-1] * n_features * (2 ** (-1 * len(num_filters))))
-
+    input_size_tdnn = int(num_filters[-1] * n_features * (2 ** (-1 * len(num_filters))))
+    
     ecapa_blocks = ECAPA_TDNN_core(input_size=input_size_tdnn,
                                    lin_neurons=nOut, activation=torch.nn.ReLU,
-                                   channels=[512, 512, 512, 512, 1536],
+                                   channels=[512, 512, 512, 512, 1536],        
                                    kernel_sizes=[5, 3, 3, 3, 1],
                                    dilations=[1, 2, 3, 4, 1],
                                    attention_channels=128,
                                    res2net_scale=8,
                                    se_channels=128,
                                    global_context=True)
-
+    
     model = nn.Sequential(res_blocks,
                           ecapa_blocks)
     return model

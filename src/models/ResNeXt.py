@@ -3,7 +3,7 @@ import math
 import torch
 import torch.nn as nn
 
-from .NeXt_utils import *
+from .utils.NeXt_utils import *
 
 
 class ResNeXt(nn.Module):

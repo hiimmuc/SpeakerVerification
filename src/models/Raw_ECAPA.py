@@ -1,8 +1,7 @@
-import importlib
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import importlib
 
 from models import ECAPA_TDNN, RawNet2_custom
 from models.FeatureExtraction.TDFbanks import tdfbanks
@@ -20,10 +19,9 @@ class Raw_ECAPA(nn.Module):
     def __init__(self, nOut=512, **kwargs):
         super(Raw_ECAPA, self).__init__()
         # SiLU, ReLU, GELU
-        self.ECAPA_TDNN = ECAPA_TDNN.MainModel(nOut=192,
+        self.ECAPA_TDNN = ECAPA_TDNN.MainModel(nOut=192, 
                                                activation=torch.nn.GELU,
-                                               channels=[
-                                                   512, 512, 512, 512, 1536],
+                                               channels= [512, 512, 512, 512, 1536],
                                                input_norm=True, **kwargs)
         self.rawnet2v2 = RawNet2_custom.MainModel(nOut=nOut-192,
                                                   front_proc='sinc',  aggregate='asp',
@@ -32,17 +30,17 @@ class Raw_ECAPA(nn.Module):
         features = 'melspectrogram'
         Features_extractor = importlib.import_module(
             'models.FeatureExtraction.feature').__getattribute__(f"{features}")
-        self.compute_features = Features_extractor(**kwargs)
+        self.compute_features = Features_extractor(**kwargs)         
 
     def forward(self, x):
         #####
-
+        
         # #####
         # # forward model 1
         # #####
         with torch.no_grad():
             with torch.cuda.amp.autocast(enabled=False):
-                x_spec = self.compute_features(x)
+                         x_spec = self.compute_features(x)
         out1 = self.ECAPA_TDNN(x_spec)
         # #####
         # # forward model 2
@@ -55,7 +53,7 @@ class Raw_ECAPA(nn.Module):
 
 
 def MainModel(nOut=512, **kwargs):
-    model = Raw_ECAPA(nOut=nOut, **kwargs)
+    model = Raw_ECAPA(nOut=nOut,**kwargs)
     return model
 
 

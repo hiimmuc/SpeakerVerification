@@ -1,34 +1,34 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-import glob
 import os
-import subprocess
 import sys
 import time
+import glob
+import subprocess
 import warnings
 
 import torch
-import torch.backends.cudnn as cudnn
-import torch.distributed as dist
-import torch.multiprocessing as mp
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.distributed as dist
+import torch.multiprocessing as mp
+import torch.backends.cudnn as cudnn
 import torch.utils.data.distributed
-from torch.utils.tensorboard import SummaryWriter
 
 from callbacks.earlyStopping import *
 from dataloader import train_data_loader
-from model import ModelHandling, SpeakerEncoder, WrappedModel
-from utils import cprint, plot_from_file, read_log_file, tuneThresholdfromScore
+from model import SpeakerEncoder, WrappedModel, ModelHandling
+from utils import tuneThresholdfromScore, read_log_file, plot_from_file, cprint
 
+from torch.utils.tensorboard import SummaryWriter
 ###
 
 # Try to import NSML
 try:
     import nsml
-    from nsml import (DATASET_PATH, HAS_DATASET, MY_RANK, NSML_NFS_OUTPUT,
-                      PARALLEL_PORTS, PARALLEL_WORLD, SESSION_NAME)
+    from nsml import HAS_DATASET, DATASET_PATH, PARALLEL_WORLD, PARALLEL_PORTS, MY_RANK
+    from nsml import NSML_NFS_OUTPUT, SESSION_NAME
 except:
     pass
 
@@ -79,7 +79,7 @@ def main_worker(gpu, nprocs, args):
         if torch.cuda.device_count() > 1:
             # dim = 0 [30, xxx] -> [10, ...], [10, ...], [10, ...] on 3 GPUs
             s = nn.DataParallel(
-                s, device_ids=[i for i in range(torch.cuda.device_count())])
+                s, device_ids=[i for i in range(torch.cuda.device_count())], find_unused_parameters=True)
             # device = 'cuda'  # to the primary gpu
             s = s.to(device)
         else:
@@ -96,7 +96,7 @@ def main_worker(gpu, nprocs, args):
         s.cuda(args.gpu)
 
         s = torch.nn.parallel.DistributedDataParallel(
-            s, device_ids=[args.gpu], find_unused_parameters=False)
+            s, device_ids=[args.gpu], find_unused_parameters=True)
 
     else:
         s = WrappedModel(s).to(device)
@@ -105,7 +105,7 @@ def main_worker(gpu, nprocs, args):
 
     # Choose weight as pretrained model
     weight_path, start_lr, init_epoch = choose_model_state(
-        args, priority='previous')
+        args, priority='defined')
 
     if weight_path is not None:
         if args.gpu == 0:

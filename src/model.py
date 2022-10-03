@@ -12,12 +12,11 @@ import onnxruntime as onnxrt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from dataloader import test_data_loader, worker_init_fn
+from processing.audio_loader import loadWAV
 from torch.cuda.amp import GradScaler, autocast
 from torchsummary import summary
 from tqdm.auto import tqdm
-
-from dataloader import test_data_loader, worker_init_fn
-from processing.audio_loader import loadWAV
 from utils import cprint, read_config, similarity_measure
 
 
@@ -830,4 +829,4 @@ if __name__ == '__main__':
         input_dim = (
             int(args.audio_spec['sample_rate'] * args.audio_spec['sentence_len']),)
     summary(model, input_dim, device='cpu', depth=3, col_width=16, col_names=[
-            "input_size", "output_size", "num_params", "mult_adds"])
+            "input_size", "output_size", "num_params", "mult_adds"], batch_dim=0)

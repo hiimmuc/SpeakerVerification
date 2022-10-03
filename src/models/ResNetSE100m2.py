@@ -9,7 +9,6 @@ def MainModel(nOut=256, **kwargs):
     model = ResNetSE(SEBottleneck, num_layers, num_filters, nOut, **kwargs)
     return model
 
-
 if __name__ == '__main__':
 
     pass

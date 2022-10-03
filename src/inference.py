@@ -11,13 +11,12 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn.functional as F
+from model import SpeakerEncoder, WrappedModel, ModelHandling
+
 from sklearn.metrics import (accuracy_score, classification_report,
                              confusion_matrix, fbeta_score, roc_curve)
 from tqdm import tqdm
-
-from model import ModelHandling, SpeakerEncoder, WrappedModel
-from utils import (ComputeErrorRates, ComputeMinDcf, plot_cm,
-                   tuneThresholdfromScore)
+from utils import ComputeErrorRates, ComputeMinDcf, tuneThresholdfromScore, plot_cm
 
 # ---------------------------------//
 # Evaluation code - must run on single GPU
@@ -217,7 +216,7 @@ def inference(args):
 
         res = speaker_model.testFromList(args.verification_file,
                                          thresh_score=threshold_set,
-                                         output_file=args.log_test_files['com'],
+                                         output_file=None,
                                          distributed=args.distributed,
                                          dataloader_options=args.dataloader_options,
                                          cohorts_path=args.cohorts_path,

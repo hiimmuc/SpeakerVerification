@@ -31,4 +31,4 @@ class AAmSoftmaxAP(nn.Module):
         nlossSm, prec2 = self.softmax(
             x.reshape(-1, x.size()[-1]), label.repeat_interleave(2))
 
-        return sum([nlossAAm, nlossAP, nlossSm])/3 , prec2
+        return (nlossAAm + nlossAP + nlossSm)/3, prec2

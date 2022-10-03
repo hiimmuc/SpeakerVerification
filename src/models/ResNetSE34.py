@@ -1,5 +1,5 @@
+from models.blocks.ResNetBlocks import SEBasicBlock
 from models.ResNetBaseline import ResNetSE
-from models.ResNetBlocks import SEBasicBlock
 
 
 def MainModel(nOut=256, **kwargs):

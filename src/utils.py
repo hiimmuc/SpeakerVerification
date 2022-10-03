@@ -1,26 +1,34 @@
+import pandas as pd
+import seaborn as sns
+from sklearn.metrics import (accuracy_score, classification_report,
+                             confusion_matrix, fbeta_score, roc_curve,
+                             ConfusionMatrixDisplay)
+from datetime import datetime
+import platform
+import psutil
+from hyperpyyaml import load_hyperpyyaml
+import sys
 import argparse
 import os
-import platform
-import sys
+
 from argparse import Namespace
-from datetime import datetime
-from operator import itemgetter
 
 import numpy as np
-import pandas as pd
-import psutil
-import seaborn as sns
+
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from hyperpyyaml import load_hyperpyyaml
-from matplotlib import pyplot as plt
-from sklearn import metrics
-from sklearn.metrics import (ConfusionMatrixDisplay, accuracy_score,
-                             classification_report, confusion_matrix,
-                             fbeta_score, precision_recall_curve, roc_curve)
 
 import yaml
+from matplotlib import pyplot as plt
+
+
+from sklearn import metrics
+from sklearn.metrics import precision_recall_curve
+
+
+from operator import itemgetter
 
 
 # model utils

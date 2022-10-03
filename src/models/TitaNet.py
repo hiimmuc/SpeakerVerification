@@ -4,8 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-from models.titanet_utils import modules
+from models.blocks import titanet_blocks as modules
 
 
 class TitaNet(nn.Module):

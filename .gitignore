@@ -1,6 +1,7 @@
 # custom
 backup/
 dataset/
+wenv/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

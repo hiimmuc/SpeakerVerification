@@ -8,7 +8,6 @@ def MainModel(nOut=512, **kwargs):
     model = ResNetSE(SEBottleneck, [3, 4, 6, 3], num_filters, nOut, **kwargs)
     return model
 
-
 if __name__ == '__main__':
 
     pass

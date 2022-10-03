@@ -2,15 +2,12 @@ import numpy as np
 import torch  # noqa: F401
 import torch.nn as nn
 import torch.nn.functional as F
-import torchaudio
 # from models.conformer.conformer.model import Conformer
-from conformer.encoder import ConformerEncoder
-from nnAudio import features
-
-from models.ECAPA_TDNN import *
-from models.ECAPA_utils import BatchNorm1d as _BatchNorm1d
-from models.ECAPA_utils import Conv1d as _Conv1d
-from utils import PreEmphasis
+from models.conformer.conformer.encoder import ConformerEncoder
+from models.layers.cnn import Conv1d
+from models.layers.normalization import BatchNorm1d
+from models.layers.pooling import AttentiveStatisticsPooling
+from models.OnStreamAugment.specaugment import SpecAugment
 
 
 class Conformer_(torch.nn.Module):
@@ -22,9 +19,7 @@ class Conformer_(torch.nn.Module):
         input_size=80,
         device="cpu",
         lin_neurons=192,
-        activation=torch.nn.GELU,
-        attention_channels=128,
-        global_context=True,
+        attention_dim=128,
         **kwargs
     ):
 
@@ -62,10 +57,18 @@ class Conformer_(torch.nn.Module):
         # Attentive Statistical Pooling
         self.asp = AttentiveStatisticsPooling(
             encoder_dim,
-            attention_channels=attention_channels,
-            global_context=global_context,
+            attention_channels=attention_dim,
+            global_context=True,
         )
         self.asp_bn = BatchNorm1d(input_size=(encoder_dim * 2))
+        self.attention = nn.Sequential(
+            nn.Conv1d(encoder_dim, attention_dim, kernel_size=1),
+            nn.ReLU(),
+            nn.BatchNorm1d(attention_dim),
+            nn.Conv1d(attention_dim, encoder_dim, kernel_size=1),
+            nn.Softmax(dim=2),
+        )
+        self.attention_norm = nn.BatchNorm1d(encoder_dim * 2)
 
         # Final linear transformation
         self.fc = Conv1d(
@@ -99,11 +102,22 @@ class Conformer_(torch.nn.Module):
         # conformer
         x, masks = self.conformer_block(x, lens)
         x = x.permute(0, 2, 1)
+        # Attentive Statistical Pooling
+        w = self.attention(x)
+        mu = torch.sum(x * w, dim=2)
+        sg = torch.sqrt(
+            (torch.sum((x**2) * w, dim=2) - mu**2).clamp(min=1e-4, max=1e4)
+        )
+        x = torch.cat((mu, sg), 1)
+        x = self.attention_norm(x)
+        x = x.unsqueeze(1).permute(0, 2, 1)
 
         # Attentive Statistical Pooling
-        x = self.asp(x, lengths=lengths)
-        x = self.asp_bn(x)
-        # x = x.permute(0, 2, 1)
+        # x = self.asp(x, lengths=lengths)
+        # print(x.shape)
+        # x = self.asp_bn(x)
+        # print(x.shape)
+
         # Final linear transformation
         x = self.fc(x)
         x = x.squeeze()

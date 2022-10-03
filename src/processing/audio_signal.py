@@ -9,9 +9,8 @@ Authors
  
 Taken from speechbrain repo
 """
-import math
-
 import torch
+import math
 from packaging import version
 
 
@@ -55,8 +54,7 @@ def compute_amplitude(waveforms, lengths=None, amp_type="avg", scale="linear"):
         if lengths is None:
             out = torch.mean(torch.abs(waveforms), dim=1, keepdim=True)
         else:
-            wav_sum = torch.sum(input=torch.abs(
-                waveforms), dim=1, keepdim=True)
+            wav_sum = torch.sum(input=torch.abs(waveforms), dim=1, keepdim=True)
             out = wav_sum / lengths
     elif amp_type == "peak":
         out = torch.max(torch.abs(waveforms), dim=1, keepdim=True)[0]
@@ -150,8 +148,7 @@ def rescale(waveforms, lengths, target_lvl, amp_type="avg", scale="linear"):
         out = dB_to_amplitude(target_lvl) * waveforms
 
     else:
-        raise NotImplementedError(
-            "Invalid scale, choose between dB and linear")
+        raise NotImplementedError("Invalid scale, choose between dB and linear")
 
     if batch_added:
         out = out.squeeze(0)
@@ -416,7 +413,7 @@ def notch_filter(notch_freq, filter_width=101, notch_width=0.05):
             return torch.sin(x) / x
 
         # The zero is at the middle index
-        return torch.cat([_sinc(x[:pad]), torch.ones(1), _sinc(x[pad + 1:])])
+        return torch.cat([_sinc(x[:pad]), torch.ones(1), _sinc(x[pad + 1 :])])
 
     # Compute a low-pass filter with cutoff frequency notch_freq.
     hlpf = sinc(3 * (notch_freq - notch_width) * inputs)

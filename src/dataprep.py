@@ -5,6 +5,7 @@ import hashlib
 import os
 import random
 import subprocess
+import sys
 import tarfile
 from multiprocessing import Pool
 from pathlib import Path
@@ -12,15 +13,16 @@ from zipfile import ZipFile
 
 import numpy as np
 import soundfile as sf
+from processing.audio_loader import AugmentWAV, loadWAV
+# from processing.dataset import get_audio_properties, read_blacklist
+from processing.wav_conversion import convert_audio_shell
 from pydub import AudioSegment
 from scipy.io import wavfile
 from tqdm import tqdm
-
-from processing.audio_loader import AugmentWAV, loadWAV
-from processing.dataset import get_audio_properties, read_blacklist
-from processing.wav_conversion import convert_audio_shell
 from utils import read_config
+import torchaudio
 
+torchaudio.set_audio_backend("soundfile")
 
 def get_audio_path(folder):
     """
@@ -290,33 +292,44 @@ class DataGenerator():
         """
         Generate train test lists for generate_metadata data
         """
+
         valid_spks = []
         invalid_spks = []
 
-        root = Path(self.data_folder) / 'wav'
+        # check for multi directories:
+        if ',' in self.data_folder:
+            roots = self.data_folder.replace(' ', '').split(',')
+        else:
+            roots = [self.data_folder]
 
-        classpaths = [d for d in root.iterdir() if d.is_dir()]
-        classpaths.sort()
+        print(f"Generate metadata from {len(roots)} directories:", *roots, sep='\n-')
+
+        class_paths = []
+        for data_folder in tqdm(roots, desc="\nGetting speakers list"):
+
+            root = Path(data_folder) / 'wav'
+
+            class_paths.extend([d for d in root.iterdir() if d.is_dir()])
+
+        class_paths.sort()
 
         if num_spks == -1:
-            num_spks = len(classpaths)
+            num_spks = len(class_paths)
 
         print('Generate dataset metadata files, total:', num_spks)
         print("Minimum utterances per speaker required:", lower_num)
         print("Maximum utterances per speaker required:", upper_num)
 
         train_filepaths_list = []
-        val_filepaths_list = []
+        # val_filepaths_list = []
 
-        loader_bar = tqdm(list(classpaths)[:], desc="Processing:...")
-        for classpath in loader_bar:
+        # class_paths: id of speaker
+        loader_bar = tqdm(list(class_paths)[:], desc="Processing:...")
+        for class_path in loader_bar:
+            # wav/.../audio_id.wav
+            filepaths = list(class_path.rglob('*.wav'))
 
-            filepaths = list(classpath.glob('*.wav'))
-            # check duration, sr
-            filepaths = check_valid_audio(
-                filepaths, self.args.audio_spec['sentence_len'] * 0.5, self.args.audio_spec['sample_rate'])
-
-            # checknumber of files
+            # check number of files
             if len(filepaths) < lower_num:
                 continue
             elif upper_num > 0:
@@ -325,7 +338,7 @@ class DataGenerator():
             if len(filepaths) == 0:
                 continue
 
-            valid_spks.append(str(Path(classpath)))
+            valid_spks.append(str(Path(class_path)))
 
             random.shuffle(filepaths)
 
@@ -343,13 +356,16 @@ class DataGenerator():
 
             # write train file
             for train_filepath in train_filepaths:
-                spkID = str(train_filepath.parent.stem.split('-')[0])
+                # list(path.parents)[list(path.parents).index(Path(root)) - 1]
+                spkID = str(Path(class_path.name).stem.split('-')[0])
                 ext = str(train_filepath).split('.')[-1]
-                duration, rate = get_audio_properties(str(train_filepath))
+                audio_infor = torchaudio.info(str(train_filepath))\
+                
+                duration = audio_infor.num_frames / audio_infor.sample_rate
                 train_filepaths_list.append(
                     [spkID, str(train_filepath), duration, ext])
 
-            val_filepaths_list.append(val_filepaths)
+            # val_filepaths_list.append(val_filepaths)
 
             # break when reach numer of maximum spk
             if len(valid_spks) >= num_spks:
@@ -360,70 +376,51 @@ class DataGenerator():
                 Valid_speakers=f" {len(valid_spks)} speakers")
 
         ######################## gathering val files #########################
-        val_pairs = []
-        for val_filepaths in tqdm(val_filepaths_list, desc="Generating validation file..."):
-            for i in range(len(val_filepaths) - 1):
-                for j in range(i + 1, len(val_filepaths)):
-                    # positive pairs
-                    label = '1'
-                    val_pairs.append(
-                        [label, str(val_filepaths[i]), str(val_filepaths[j])])
+#         val_pairs = []
+#         for val_filepaths in tqdm(val_filepaths_list, desc="Generating validation file..."):
+#             for i in range(len(val_filepaths) - 1):
+#                 for j in range(i + 1, len(val_filepaths)):
+#                     # positive pairs
+#                     label = '1'
+#                     val_pairs.append(
+#                         [label, str(val_filepaths[i]), str(val_filepaths[j])])
 
-                    label = '0'
-                    while True:
-                        x = random.randint(0, len(val_filepaths_list) - 1)
-                        if not val_filepaths_list[x]:
-                            continue
-                        if val_filepaths_list[x][0].parent.stem != val_filepaths[i].parent.stem:
-                            break
+#                     label = '0'
+#                     while True:
+#                         x = random.randint(0, len(val_filepaths_list) - 1)
+#                         if not val_filepaths_list[x]:
+#                             continue
+#                         if val_filepaths_list[x][0].parent.stem != val_filepaths[i].parent.stem:
+#                             break
 
-                    y = random.randint(0, len(val_filepaths_list[x]) - 1)
-                    # negative pairs
-                    val_pairs.append(
-                        [label, str(val_filepaths[i]), str(val_filepaths_list[x][y])])
+#                     y = random.randint(0, len(val_filepaths_list[x]) - 1)
+#                     # negative pairs
+#                     val_pairs.append(
+#                         [label, str(val_filepaths[i]), str(val_filepaths_list[x][y])])
 
         # write train and val files
         print("Generating metadata files...")
-        os.makedirs(Path(root.parent / 'metadata'), exist_ok=True)
-        with open(Path(root.parent, f'metadata/train.csv'), 'w', newline='') as wf:
-            spamwriter = csv.writer(wf, delimiter=',')
-            spamwriter.writerow(['ID', 'path', 'duration', 'audio_format'])
+        metadata_save_path = Path(self.args.train_annotation).parent.parent
+
+        os.makedirs(Path(metadata_save_path / 'metadata'), exist_ok=True)
+        with open(Path(metadata_save_path, f'metadata/train.csv'), 'w', newline='') as wf:
+            csv_writer = csv.writer(wf, delimiter=',')
+            csv_writer.writerow(['ID', 'path', 'duration', 'audio_format'])
             for spkid, path, duration, audio_format in train_filepaths_list:
-                spamwriter.writerow([spkid, path, duration, audio_format])
+                csv_writer.writerow([spkid, path, duration, audio_format])
 
-        with open(Path(root.parent, f'metadata/valid.csv'), 'w', newline='') as wf:
-            spamwriter = csv.writer(wf, delimiter=',')
-            spamwriter.writerow(['label', 'audio1', 'audio2'])
-            for label, audio1, audio2 in val_pairs:
-                spamwriter.writerow([label, audio1, audio2])
+        # with open(Path(root.parent, f'metadata/valid.csv'), 'w', newline='') as wf:
+        #     csv_writer = csv.writer(wf, delimiter=',')
+        #     csv_writer.writerow(['label', 'audio1', 'audio2'])
+        #     for label, audio1, audio2 in val_pairs:
+        #         csv_writer.writerow([label, audio1, audio2])
 
-        # copy to save dir
-        os.makedirs(Path(self.args.train_annotation).parent, exist_ok=True)
-        subprocess.call(
-            f"cp {Path(root.parent, f'metadata/train.csv')} {str(Path(self.args.train_annotation))}", shell=True)
-        subprocess.call(
-            f"cp {Path(root.parent, f'metadata/valid.csv')} {str(Path(self.args.valid_annotation))}", shell=True)
         # some information
         print("Valid speakers:", len(valid_spks))
         print("Valid audio files:", len(train_filepaths_list))
-        print("Validation pairs:", len(val_pairs))
+        # print("Validation pairs:", len(val_pairs))
 
         return valid_spks, invalid_spks
-
-
-def check_valid_audio(files, duration_lim=1.5, sr=8000):
-    filtered_list = []
-    files = [str(path) for path in files]
-
-    for fname in files:
-        duration, rate = get_audio_properties(fname)
-        if rate == sr and duration >= duration_lim:
-            filtered_list.append(fname)
-        else:
-            pass
-    filtered_list.sort(reverse=True, key=lambda x: get_audio_properties(x)[0])
-    filtered_list = [Path(path) for path in filtered_list]
-    return filtered_list
 
 
 def restore_dataset(raw_dataset, **kwargs):
@@ -473,7 +470,7 @@ try:
             vad_engine.detect(audio_path, duration_min=1.5)
         print("Done!")
 except:
-    print('can not import vad_tools')
+    print('Can not import vad_tools')
 
     def vad_on_dataset(raw_dataset):
         pass
@@ -555,15 +552,18 @@ if __name__ == '__main__':
         args = argparse.Namespace(**args)
 
     print('Start processing...')
-    if not os.path.exists(args.save_path):
-        raise ValueError('Target directory does not exist.')
 
     if args.generate:
         data_generator = DataGenerator(args)
         data_generator.generate_metadata(
             num_spks=args.num_spks, lower_num=args.lower_num, upper_num=args.upper_num)
+        sys.exit(1)
     if args.restore:
         restore_dataset(args.data_folder)
+        sys.exit(1)
+
+    if not os.path.exists(args.save_path):
+        raise ValueError('Target directory does not exist.')
 
     if args.augment:
         f = open('lists/augment.txt', 'r')
