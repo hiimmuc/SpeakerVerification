@@ -1,34 +1,34 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+import glob
 import os
+import subprocess
 import sys
 import time
-import glob
-import subprocess
 import warnings
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
+import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 import torch.multiprocessing as mp
-import torch.backends.cudnn as cudnn
+import torch.nn as nn
+import torch.nn.functional as F
 import torch.utils.data.distributed
+from torch.utils.tensorboard import SummaryWriter
 
 from callbacks.earlyStopping import *
 from dataloader import train_data_loader
-from model import SpeakerEncoder, WrappedModel, ModelHandling
-from utils import tuneThresholdfromScore, read_log_file, plot_from_file, cprint
+from model import ModelHandling, SpeakerEncoder, WrappedModel
+from utils import cprint, plot_from_file, read_log_file, tuneThresholdfromScore
 
-from torch.utils.tensorboard import SummaryWriter
 ###
 
 # Try to import NSML
 try:
     import nsml
-    from nsml import HAS_DATASET, DATASET_PATH, PARALLEL_WORLD, PARALLEL_PORTS, MY_RANK
-    from nsml import NSML_NFS_OUTPUT, SESSION_NAME
+    from nsml import (DATASET_PATH, HAS_DATASET, MY_RANK, NSML_NFS_OUTPUT,
+                      PARALLEL_PORTS, PARALLEL_WORLD, SESSION_NAME)
 except:
     pass
 
@@ -87,6 +87,8 @@ def main_worker(gpu, nprocs, args):
 
     # NOTE: setup distributed data parallelism training
     if args.distributed:
+        port = find_free_port()
+
         setup_DDP(rank=args.gpu,
                   world_size=ngpus_per_node,
                   backend=args.distributed_backend,
@@ -241,7 +243,7 @@ def main_worker(gpu, nprocs, args):
     sys.exit(1)
 
 #######################################
-# main fucntion
+# main function
 ######################################
 
 
@@ -265,7 +267,7 @@ def train(args):
         try:
             if args.distributed:
                 npugs = torch.cuda.device_count()
-                mp.spawn(main_worker, nprocs=npugs, args=(npugs, args))
+                mp.spawn(main_worker, nprocs=npugs, args=(npugs, args,))
             else:
                 main_worker(0, 1, args)
 
@@ -273,13 +275,14 @@ def train(args):
             print(f"Got error: {e} -> try to turn to single-GPU training")
             args.distributed = False
             args.data_parallel = False
-            main_worker(0, 1, args)
+            cleanup_DDP()
+            # main_worker(0, 1, args)
 
     except KeyboardInterrupt:
         print('Interrupted')
         try:
-            dist.destroy_process_group()
-        except KeyboardInterrupt:
+            cleanup_DDP()
+        except:
             os.system(
                 "kill $(ps aux | grep multiprocessing.spawn | grep -v grep | awk '{print $2}')")
 
@@ -298,6 +301,17 @@ def setup_DDP(rank, world_size, backend='nccl', address='localhost', port='12345
 
 def cleanup_DDP():
     dist.destroy_process_group()
+
+
+def find_free_port():
+    """ https://stackoverflow.com/questions/1365265/on-localhost-how-do-i-pick-a-free-port-number """
+    import socket
+    from contextlib import closing
+
+    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+        s.bind(('', 0))
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        return str(s.getsockname()[1])
 
 
 def choose_model_state(args, priority='defined'):
